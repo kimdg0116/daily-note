@@ -305,18 +305,35 @@ function api(u, body) {
   return fetch(u, o).then(async r => { const j = await r.json(); if (!r.ok) throw new Error(j.error || r.status); return j; });
 }
 /* ── 폰: 맥 서버 대신 동기화 서버(Apps Script, sync/Code.js)를 우체통으로 쓴다.
-   맥이 모든 노트를 올려 두고, 폰은 최근 60일과 열어 본 노트를 보관한다(예전 노트는 열 때 받아 옴). 고친 칸은 보내 두면 맥이 볼트에 쓴다 ── */
-const APP_VERSION = '26.10.14-1';                                     // 올릴 때마다 version.json · sw.js 와 같이 올린다
+   우체통은 오가는 것만 잠깐 들고, 노트 사본은 폰 안(IndexedDB)에 전부 둔다. 처음 연결하면 맥이 모든 노트를 나눠 보내고,
+   그 뒤로는 바뀐 노트만 온다. 고친 칸은 보내 두면 맥이 볼트에 쓴다 ── */
+const APP_VERSION = '26.10.14-2';                                     // 올릴 때마다 version.json · sw.js 와 같이 올린다
 const LOCAL = /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
 const PHONE = location.protocol === 'https:' || (LOCAL && location.search.includes('phone'));   // ?phone = 맥에서 폰 화면 시험
 // 맥에서 폰 화면을 시험할 때는 늘 가짜 연동 서버(node sync/test_sync.mjs --serve)로만 — 진짜 노트에 시험 글이 섞이지 않게
 const SYNC_URL = LOCAL ? 'http://127.0.0.1:8751/' : 'https://script.google.com/macros/s/AKfycbwAzbhrtPtjrd8KVQuFTFXfgLmzY4Cgsk-DZlF2ur3b6a7hU_LMQOaKddSt-0O9mOIP/exec';
-const RECENT = 60;                                                    // 폰에 늘 보관하는 날 (sync/Code.js 의 RECENT 와 같게)
 if (PHONE) document.documentElement.classList.add('phone');
-let SY = {}, OUT = {};                                                // SY = 맥이 올린 노트 보관본, OUT = 아직 못 보낸 폰 수정
+// SY = 연결 상태(작은 것, localStorage), DOCS = 노트 사본 전부(IndexedDB, 기한·용량 걱정 없음), OUT = 아직 못 보낸 폰 수정
+let SY = {}, OUT = {}, DOCS = {};
 try { SY = JSON.parse(localStorage.getItem('dn.sync')) || {}; OUT = JSON.parse(localStorage.getItem('dn.out')) || {}; } catch (e) {}
-SY.docs = SY.docs || {};
+delete SY.docs; delete SY.seen;                                       // 예전(localStorage 에 노트 보관) 흔적
 function keepSY() { try { localStorage.setItem('dn.sync', JSON.stringify(SY)); localStorage.setItem('dn.out', JSON.stringify(OUT)); } catch (e) {} }
+const idb = new Promise(ok => {                                       // 폰 안 노트 보관함
+  if (!PHONE || !window.indexedDB) return ok(null);
+  const q = indexedDB.open('daily-note', 1);
+  q.onupgradeneeded = () => q.result.createObjectStore('docs');
+  q.onsuccess = () => ok(q.result); q.onerror = () => ok(null);
+});
+const ready = idb.then(db => db && new Promise(ok => {
+  const q = db.transaction('docs').objectStore('docs').openCursor();
+  q.onsuccess = () => { const c = q.result; if (c) { DOCS[c.key] = c.value; c.continue(); } else ok(); };
+  q.onerror = () => ok();
+}));
+function saveDocs(docs) {
+  Object.assign(DOCS, docs);
+  idb.then(db => { if (!db) return; const st = db.transaction('docs', 'readwrite').objectStore('docs'); for (const d in docs) st.put(docs[d], d); });
+}
+if (PHONE && navigator.storage?.persist) navigator.storage.persist().catch(() => {});   // 저장 공간이 모자라도 지우지 말라고
 const post = body => fetch(SYNC_URL, { method: 'POST', body: JSON.stringify({ code: SY.code, ...body }) }).then(r => r.json());
 function weekNo(s) {                                                  // 옵시디언(moment ko)과 같은 주: 일요일 시작, 1월 1일이 든 주가 1주
   const d = new Date(s + 'T12:00'), sun = new Date(d); sun.setDate(d.getDate() - d.getDay());
@@ -326,15 +343,12 @@ function weekNo(s) {                                                  // 옵시�
 }
 async function phoneDay(d) {
   if (!SY.code) throw new Error('설정 > 폰 연동에 맥 앱에 나온 연결 코드를 넣어 주세요');
-  if (!SY.docs[d] && (SY.dates || []).includes(d)) {                  // 폰에 없는 예전 노트는 열 때 받아 온다
-    const r = await post({ op: 'docs', dates: [d] }).catch(() => ({}));
-    if (!r.docs?.[d]) throw new Error('인터넷에 연결되면 이 날 노트를 받아 와요');
-    SY.docs[d] = r.docs[d];
-  }
-  if (SY.docs[d]) { (SY.seen ||= {})[d] = Date.now(); keepSY(); }
-  let n = SY.docs[d] ? JSON.parse(JSON.stringify(SY.docs[d])) : null;
+  await ready;
+  if (!DOCS[d] && (SY.dates || []).includes(d))
+    throw new Error(SY.receiving ? `맥에서 노트를 받아 오는 중이에요 (${Object.keys(DOCS).length}/${SY.dates.length})` : '아직 이 날 노트를 받지 못했어요. 맥이 켜져 있으면 곧 들어와요');
+  let n = DOCS[d] ? JSON.parse(JSON.stringify(DOCS[d])) : null;
   if (!n) {
-    const y = SY.docs[shift(d, -1)];
+    const y = DOCS[shift(d, -1)];
     n = { date: d, exists: false, fm: {}, sec: { tomorrow: '', today: y?.sec?.tomorrow || '', journal: '' }, quote: { state: 'new' }, author: null };
   }
   Object.assign(n, { name: n.name || `${d}(${WD[new Date(d + 'T12:00').getDay()]})`, week: n.week || weekNo(d), mtime: n.mtime || 0, mind: SY.mind || [], today: today() });
@@ -342,7 +356,7 @@ async function phoneDay(d) {
   return n;
 }
 function phoneSave(b) {
-  const o = OUT[b.date] || (OUT[b.date] = { fm: {}, sec: {} }), doc = SY.docs[b.date];
+  const o = OUT[b.date] || (OUT[b.date] = { fm: {}, sec: {} }), doc = DOCS[b.date];
   for (const part of ['fm', 'sec']) for (const k in (b[part] || {}))
     o[part][k] = { v: b[part][k], b: o[part][k] ? o[part][k].b : (doc?.[part]?.[k] ?? null) };      // b = 고치기 전 값 (맥이 둘 다 고쳤는지 볼 때 쓴다)
   keepSY(); clearTimeout(pushT); pushT = setTimeout(() => syncPhone().then(phoneRefresh, () => {}), 1200);
@@ -350,42 +364,48 @@ function phoneSave(b) {
 }
 // 폰의 옵시디언 볼트 이름 (맥 볼트를 받아 쓰는 폰 볼트. 설정에서 바꾼다)
 const vaultName = () => { try { return localStorage.getItem('dn.vault') || 'obsidian phone'; } catch (e) { return 'obsidian phone'; } };
-let pushT = 0, busy = null;
+let pushT = 0, busy = null, nextPull = 0;
 function syncPhone() {
   if (!SY.code) return Promise.reject(new Error('code'));
   return busy || (busy = (async () => {
-    for (const d of Object.keys(OUT)) {
-      const sent = JSON.stringify(OUT[d]), body = { op: 'edit', date: d, t: Date.now(), fm: OUT[d].fm, sec: OUT[d].sec };
-      const r = await post(body);
+    await ready;
+    for (const d of Object.keys(OUT)) {                               // 1) 폰에서 고친 칸 보내기
+      const sent = JSON.stringify(OUT[d]), o = OUT[d];
+      const r = await post({ op: 'edit', date: d, t: Date.now(), fm: o.fm, sec: o.sec });
       if (r.err) throw new Error(r.err);
+      const doc = DOCS[d] || { date: d, exists: false, fm: {}, sec: { tomorrow: '', today: '', journal: '' }, quote: { state: 'new' }, author: null };
+      for (const part of ['fm', 'sec']) for (const k in o[part]) doc[part][k] = o[part][k].v;
+      saveDocs({ [d]: doc });                                         // 맥이 볼트에 쓰기 전에도 폰 사본은 고친 대로
       if (JSON.stringify(OUT[d]) === sent) delete OUT[d];            // 보내는 사이 또 고쳤으면 남겨 두고 다음에
       keepSY();
     }
-    const r = await post({ op: 'get', since: SY.rev || 0 });
+    if (!SY.full && !SY.asked) { await post({ op: 'want' }); SY.asked = true; SY.rev = 0; keepSY(); }   // 처음엔 맥에 노트 전부를 달라고
+    const r = await post({ op: 'get', since: SY.rev || 0 });         // 2) 맥에서 바뀐 노트 받기
     if (r.err) throw new Error(r.err);
-    Object.assign(SY.docs, r.docs);
+    if (r.stale) { Object.assign(SY, { full: false, asked: false, rev: 0 }); keepSY(); busy = null; return syncPhone(); }   // 너무 오래 안 열었다 → 전부 다시
+    saveDocs(r.docs);
     if (r.dates) SY.dates = r.dates;
     if (r.mind) SY.mind = r.mind;
-    const lo = shift(today(), -RECENT), seen = Object.keys(SY.seen || {}).sort((a, b) => SY.seen[b] - SY.seen[a]).slice(0, 40);
-    for (const d in SY.docs) if (d < lo && !seen.includes(d)) delete SY.docs[d];     // 예전 노트는 최근에 연 40개만 남긴다
-    SY.seen = Object.fromEntries(seen.map(d => [d, SY.seen[d]]));
-    Object.assign(SY, { wait: r.wait, macAt: r.macAt, rev: r.rev, at: Date.now(), err: '' });
+    if (SY.asked && !r.want) Object.assign(SY, { full: true, asked: false });
+    Object.assign(SY, { receiving: !!r.want, wait: r.wait, macAt: r.macAt, rev: r.rev, at: Date.now(), err: '' });
     keepSY();
     return r;
   })().catch(e => { SY.err = e.message === 'code' ? 'code' : 'net'; keepSY(); throw e; }).finally(() => { busy = null; }));
 }
-const syncText = d => OUT[d] ? '폰에 저장 · 보내는 중' : SY.wait?.[d] ? '맥 반영 대기' : SY.err ? '연결 안 됨 · 폰에 저장' : SY.at ? '맥과 맞춤 ' + hm(SY.at) : '';
+const syncText = d => OUT[d] ? '폰에 저장 · 보내는 중' : SY.receiving ? `노트 받는 중 ${Object.keys(DOCS).length}/${(SY.dates || []).length}`
+  : SY.wait?.[d] ? '맥 반영 대기' : SY.err ? '연결 안 됨 · 폰에 저장' : SY.at ? '맥과 맞춤 ' + hm(SY.at) : '';
 async function phoneRefresh(r) {                                      // 받은 노트로 화면 맞추기 (쓰는 중이면 상태만)
   if (!D) return load(want || today());
   const typing = pending() || saving || OUT[D.date] || document.activeElement?.closest?.('#view');
-  if (r?.docs?.[D.date] && !typing) { D = await phoneDay(D.date); T = { today: parseTasks(D.sec.today), tomorrow: parseTasks(D.sec.tomorrow) }; stateText = syncText(D.date); render(); }
+  if ((r?.docs?.[D.date] || (!D.exists && DOCS[D.date])) && !typing) { D = await phoneDay(D.date); T = { today: parseTasks(D.sec.today), tomorrow: parseTasks(D.sec.tomorrow) }; stateText = syncText(D.date); render(); }
   else if (!pending() && !saving) state(syncText(D.date));
+  if (!$('#settings').hidden) drawSync();
 }
 if (PHONE) api = async (u, body) => {
   const [p, qs] = u.split('?');
   if (p === '/api/day') return phoneDay(new URLSearchParams(qs).get('date'));
   if (p === '/api/save') return phoneSave(body);
-  if (p === '/api/days') return { dates: [...new Set([...(SY.dates || []), ...Object.keys(SY.docs).filter(d => SY.docs[d].exists), ...Object.keys(OUT)])] };
+  if (p === '/api/days') { await ready; return { dates: [...new Set([...(SY.dates || []), ...Object.keys(DOCS).filter(d => DOCS[d].exists), ...Object.keys(OUT)])] }; }
   if (p === '/api/job') return { state: 'idle' };
   if (p === '/api/open') { location.href = `obsidian://open?vault=${encodeURIComponent(vaultName())}&file=${encodeURIComponent(body.rel)}`; return { ok: true }; }
   throw new Error('명언 정리는 맥에서 해요');
@@ -651,7 +671,7 @@ document.addEventListener('click', e => {
   else if (act === 'link') {
     const c = $('#syncCode').value.trim().toUpperCase();
     if (!c) return;
-    SY = { code: c, docs: {} }; keepSY(); drawSync();
+    SY = { code: c }; keepSY(); drawSync(); nextPull = Date.now() + 3000;
     syncPhone().then(() => { toast('맥과 이어졌어요'); drawSync(); load(want || today()); },
       () => { toast(SY.err === 'code' ? '연결 코드가 맞지 않아요' : '맞추지 못했어요. 인터넷을 확인하세요'); drawSync(); });
   }
@@ -764,7 +784,8 @@ async function drawSync() {
   $('#vaultName').value = vaultName();
   $('#syncInfo').textContent = !SY.code ? '맥 앱 설정 > 폰 연동에 나온 연결 코드를 넣으면 맥의 데일리 노트와 이어져요'
     : SY.err === 'code' ? '연결 코드가 맞지 않아요' : SY.err ? '맞추지 못했어요 · 인터넷을 확인하세요 (쓴 것은 폰에 남아 있어요)'
-    : `연결됨` + (SY.at ? ` · ${hm(SY.at)} 맞춤` : '') + (SY.macAt ? ` · 맥은 ${hm(SY.macAt)} 에 마지막으로 맞춤` : '');
+    : SY.receiving ? `맥에서 노트를 받아 오는 중 (${Object.keys(DOCS).length}/${(SY.dates || []).length}) · 맥이 켜져 있어야 해요`
+    : `연결됨 · 노트 ${Object.keys(DOCS).length}개가 이 폰에 있어요` + (SY.at ? ` · ${hm(SY.at)} 맞춤` : '') + (SY.macAt ? ` · 맥은 ${hm(SY.macAt)} 에 마지막으로 맞춤` : '');
 }
 
 setTheme(theme); setColor(color);
@@ -772,8 +793,10 @@ $('#ver').textContent = 'v' + APP_VERSION;
 load(today());
 if (PHONE) {
   const pull = () => syncPhone().then(phoneRefresh, () => { if (D && !pending() && !saving) state(syncText(D.date)); });
-  if (SY.code) pull();
-  setInterval(() => { if (!document.hidden && SY.code) pull(); }, 30000);
+  setInterval(() => {                                                 // 30초마다, 노트를 받는 동안은 3초마다
+    if (document.hidden || !SY.code || Date.now() < nextPull) return;
+    nextPull = Date.now() + (SY.receiving ? 3000 : 30000); pull();
+  }, 1000);
   document.addEventListener('visibilitychange', () => { if (!document.hidden && SY.code) pull(); });
   // 새 버전 안내: version.json 과 다르면 버튼. 누르면 오프라인 보관본을 비우고 새로 받는다
   let latest = '';

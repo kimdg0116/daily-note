@@ -14,7 +14,11 @@
 
 ## 폰 앱 · 연동
 - 폰 앱 = 같은 `index.html` 을 GitHub Pages(`kimdg0116/daily-note`)로 띄운 홈 화면 앱. https 로 열리면 폰 모드가 된다 (manifest·sw.js·version.json, 앱 버전은 `APP_VERSION`·`sw.js`·`version.json` 세 곳 같이).
-- 연동은 토플 단어 앱처럼 Apps Script 우체통(`sync/Code.js`, 프로젝트 "데일리 노트 동기화"). 맥 `server.py` 가 30초마다(맥에서 저장하면 바로) 최근 노트(35일 전 ~ 7일 뒤)를 올리고, 폰에서 고친 칸을 받아 볼트에 쓴다. 맥이 꺼져 있으면 폰 수정은 우체통에 남았다가 맥 서버가 켜질 때 들어간다.
+- 연동은 토플 단어 앱처럼 Apps Script 우체통(`sync/Code.js`, 프로젝트 "데일리 노트 동기화"). 우체통은 **전달만** 한다 (Script Properties 만 써서 권한이 필요 없다).
+  - 노트 원본은 맥 볼트, 사본은 폰 안(IndexedDB)에 전부. 기한·용량 걱정 없음.
+  - 폰을 처음 연결하면 폰이 '다시 받기'(want)를 걸고, 맥이 모든 노트를 날짜순으로 묶음(80개·250KB)씩 보낸다 (폰이 앞 묶음을 받은 뒤 다음 묶음).
+  - 그 뒤로 맥은 30초마다(맥에서 저장하면 바로) 바뀐 노트만 상자에 넣고, 폰이 받아 간다. 상자가 300KB 를 넘으면 오래된 것부터 버리고, 그보다 오래 안 연 폰은 처음부터 다시 받는다.
+  - 폰에서 고친 칸은 받은 편지함에 모였다가 맥이 볼트에 쓴다. 맥이 꺼져 있으면 편지함에 남았다가 맥 서버가 켜질 때 들어간다.
 - 같은 칸을 폰과 맥에서 둘 다 고쳤으면 나중에 고친 쪽이 이긴다 (`server.py` `pick`).
 - 연결 코드는 `sync/Secret.js` (git 제외). 맥 앱 설정 > 폰 연동에 보이고, 폰 앱 설정에 넣는다.
 - 연동 서버 반영: `cd sync && ~/Desktop/app/dosimetrist-calendar-server/tools/node_modules/.bin/clasp push -f && …/clasp redeploy AKfycbwAzbhrtPtjrd8KVQuFTFXfgLmzY4Cgsk-DZlF2ur3b6a7hU_LMQOaKddSt-0O9mOIP -d "설명"`

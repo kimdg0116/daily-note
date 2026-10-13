@@ -405,11 +405,12 @@ def run_quote(d):
     SYNC_WAKE.set()                   # 번역·저자가 붙은 노트를 폰에도
 
 
-# ── 폰 연동: Apps Script 가 우체통. 맥은 모든 데일리 노트를 올리고(바뀐 것만), 폰에서 고친 칸을 받아 볼트에 쓴다 ─────
+# ── 폰 연동: Apps Script 가 우체통(전달만). 맥은 바뀐 노트를 보내고(폰이 처음엔 전부 받아 감), 폰에서 고친 칸을 받아 볼트에 쓴다 ─────
 
 SYNC_URL = os.environ.get('SYNC_URL') or 'https://script.google.com/macros/s/AKfycbwAzbhrtPtjrd8KVQuFTFXfgLmzY4Cgsk-DZlF2ur3b6a7hU_LMQOaKddSt-0O9mOIP/exec'
 SYNC_STATE = os.path.join(VAULT, '.daily-sync.json') if os.environ.get('VAULT') else os.path.join(HERE, 'sync', 'state.json')   # 올린 노트의 mtime·받은 수정 확인 (git 제외)
 SYNC = {'at': 0, 'err': ''}
+BATCH_N, BATCH_BYTES = 80, 250_000     # 폰이 노트를 처음 받아 갈 때 한 묶음 (우체통 상자 300KB 안에)
 SYNC_WAKE = threading.Event()
 
 
@@ -450,12 +451,24 @@ def sync_post(body):
 
 def sync_once(code):
     st = load_json(SYNC_STATE, {})
-    keep = dates = note_dates()
-    mt = {d: os.path.getmtime(path(day(d))) for d in keep}
+    dates = note_dates()
+    mt = {d: os.path.getmtime(path(day(d))) for d in dates}
     mind = mind_form()
     dh, mh = (hashlib.sha1(json.dumps(x, ensure_ascii=False).encode()).hexdigest() for x in (dates, mind))
-    body = {'code': code, 'op': 'mac', 'keep': keep, 'done': st.get('done', []),
-            'put': {d: phone_doc(day(d)) for d in keep if st.get('up', {}).get(d) != mt[d]}}
+    up = st.setdefault('up', dict(mt))    # 처음엔 지금 상태를 기준으로만 (노트 내용은 폰이 '다시 받기'로 가져간다)
+    changed = [d for d in dates if up.get(d) != mt[d]][:40]           # 맥에서 바뀐 노트 (한 번에 40개까지)
+    put = {d: phone_doc(day(d)) for d in changed}
+    body = {'code': code, 'op': 'mac', 'done': st.get('done', []), 'put': put}
+    want = st.get('want')
+    if want and not want.get('done') and want.get('seen', 0) >= want.get('sent', 0):   # 폰이 앞 묶음을 받았으면 다음 묶음
+        rest, batch, size = [d for d in dates if d > want.get('from', '')], [], 0
+        for d in rest:                    # 날짜순으로 한 묶음씩
+            put[d] = put.get(d) or phone_doc(day(d))
+            batch.append(d)
+            size += len(json.dumps(put[d], ensure_ascii=False).encode())
+            if size > BATCH_BYTES or len(batch) >= BATCH_N:
+                break
+        body['resync'] = {'to': batch[-1] if batch else want.get('from', ''), 'done': len(batch) == len(rest)}
     if st.get('dh') != dh:
         body['dates'] = dates
     if st.get('mh') != mh:
@@ -463,7 +476,8 @@ def sync_once(code):
     r = sync_post(body)
     if r.get('err'):
         raise RuntimeError('연결 코드가 맞지 않아요' if r['err'] == 'code' else r['err'])
-    st.update(up=mt, done=[], dh=dh, mh=mh)
+    up.update({d: mt[d] for d in put})
+    st.update(done=[], dh=dh, mh=mh, want=r.get('want'))
     for d, o in (r.get('ob') or {}).items():
         if not DATE.match(d):
             continue
@@ -475,7 +489,8 @@ def sync_once(code):
                 start_quote(d)
         st['done'] += [[d] + a for a in acks]
     save_json(SYNC_STATE, st)
-    return bool(st['done'])               # 받은 게 있으면 곧바로 한 번 더 (볼트에 쓴 걸 올리고 받았다고 알린다)
+    # 곧바로 한 번 더: 볼트에 쓴 걸 올리고 받았다고 알릴 때, 바뀐 노트가 남았을 때, 폰이 노트를 받아 가는 중일 때
+    return bool(st['done']) or len(changed) == 40 or bool(st['want'])
 
 
 def save_json(p, data):
