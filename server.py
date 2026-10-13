@@ -415,6 +415,8 @@ class H(BaseHTTPRequestHandler):
         q = {k: v[0] for k, v in parse_qs(u.query).items()}
         if u.path in ('/', '/index.html'):
             return self.send(200, open(os.path.join(HERE, 'index.html'), 'rb').read(), 'text/html; charset=utf-8')
+        if u.path == '/cm.js':               # 글칸 편집기 (build_cm.sh)
+            return self.send(200, open(os.path.join(HERE, 'cm.js'), 'rb').read(), 'text/javascript; charset=utf-8')
         if u.path == '/api/day':
             if not DATE.match(q.get('date', '')):
                 return self.send(400, {'error': '날짜가 이상해요'})

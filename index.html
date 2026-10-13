@@ -136,17 +136,17 @@ textarea { min-height:46px; resize:none; overflow:hidden; }
 textarea.big { min-height:120px; }
 textarea:focus, .line:focus { border-color:var(--acc); background:var(--card); }
 ::placeholder { color:color-mix(in srgb, var(--mute) 60%, transparent); }
-/* 굵게·목록 점이 보이는 글칸: 글자는 투명한 입력칸, 뒤에 같은 자리로 꾸민 글을 깐다 */
-.rt { position:relative; border-radius:12px; background:var(--bg); }
-.rt:focus-within { background:var(--card); }
-.rt > textarea, .rt-bg { margin:0; letter-spacing:normal; word-spacing:normal; white-space:pre-wrap; overflow-wrap:break-word; word-break:normal; text-align:left; }
-.rt > textarea, .rt > textarea:focus { position:relative; z-index:1; background:transparent; color:transparent; caret-color:var(--fg); }
-.rt > textarea::selection { background:color-mix(in srgb, var(--acc) 28%, transparent); }
-.rt-bg { position:absolute; inset:0; overflow:hidden; padding:10px 12px; border:1px solid transparent; font-size:15px; line-height:1.6; tab-size:4; color:var(--fg); pointer-events:none; }
-.rt-bg b { font-weight:inherit; -webkit-text-stroke:.6px currentColor; }
-.rt-bg .mk { color:var(--mute); opacity:.4; }
-.rt-bg .bul { display:inline-block; position:relative; color:transparent; }
-.rt-bg .bul::after { content:'•'; position:absolute; inset:0; text-align:center; font-weight:800; color:var(--acc); transform:scale(1.35); }
+/* 글칸 편집기(CodeMirror): 옵시디언처럼 **굵게** 기호는 숨기고(커서가 그 안에 오면 흐리게 보임), 줄 맨 앞 '- ' 는 점 */
+#view .cm-editor { border:1px solid var(--line); border-radius:12px; background:var(--bg); font-size:15px; }
+#view .cm-editor.cm-focused { outline:none; border-color:var(--acc); background:var(--card); }
+#view .cm-editor .cm-scroller { font-family:inherit; line-height:1.6; }
+#view .cm-editor .cm-content { min-height:44px; padding:10px 0; color:var(--fg); caret-color:var(--fg); }
+#view .cm-editor.big .cm-content { min-height:118px; }
+#view .cm-editor .cm-line { padding:0 12px; }
+#view .cm-editor .cm-placeholder { color:color-mix(in srgb, var(--mute) 60%, transparent); }
+#view .cm-b { font-weight:700; }
+#view .cm-mk { color:var(--mute); opacity:.5; }
+#view .cm-bul { display:inline-block; width:.6em; text-align:center; font-weight:800; color:var(--acc); transform:scale(1.3); }
 
 /* 날짜 */
 .hero { display:flex; align-items:flex-end; gap:14px; padding:16px; border-left:5px solid var(--deep); }
@@ -375,44 +375,23 @@ function taskKey(e, el) {
   }
 }
 
-/* ── Journal·마음 기록: 옵시디언처럼 목록이 이어진다 (Enter 다음 줄 '- ', Tab 들여쓰기), ⌘B 굵게 ── */
-function mdKey(e, el) {
-  if (e.isComposing || e.keyCode === 229) return;
-  const v = el.value, s = el.selectionStart, ls = v.lastIndexOf('\n', s - 1) + 1, line = v.slice(ls, s);
-  if (e.metaKey && e.key === 'b') {
-    e.preventDefault();
-    const b = el.selectionEnd, sel = v.slice(s, b);
-    if (v.slice(s - 2, s) === '**' && v.slice(b, b + 2) === '**') {          // 이미 굵게면 풀기
-      el.setSelectionRange(s - 2, b + 2); document.execCommand('insertText', false, sel); el.setSelectionRange(s - 2, b - 2);
-    } else { document.execCommand('insertText', false, '**' + sel + '**'); el.setSelectionRange(s + 2, b + 2); }
-    return;
-  }
-  if (e.key === 'Enter' && !e.shiftKey && s === el.selectionEnd) {
-    const m = line.match(/^(\s*)- (\[[ xX]\] )?/);
-    if (!m) return;
-    e.preventDefault();
-    if (line === m[0]) { el.setSelectionRange(ls, s); document.execCommand('delete'); }   // 빈 항목에서 Enter = 목록 끝
-    else document.execCommand('insertText', false, '\n' + m[1] + '- ' + (m[2] ? '[ ] ' : ''));
-  } else if (e.key === 'Tab') {
-    e.preventDefault();
-    if (!e.shiftKey) { el.setSelectionRange(ls, ls); document.execCommand('insertText', false, '\t'); el.setSelectionRange(s + 1, s + 1); }
-    else if (v[ls] === '\t') { el.setSelectionRange(ls, ls + 1); document.execCommand('delete'); el.setSelectionRange(s - 1, s - 1); }
-  }
-}
 function grow(el) { el.style.height = 'auto'; el.style.height = el.scrollHeight + 2 + 'px'; }
 
 /* ── 화면 ── */
 const WD = ['일', '월', '화', '수', '목', '금', '토'];
 const has = v => v != null && v !== '' && v !== false;
-const ta = (attr, val, ph, cls = '') => {
-  const t = `<textarea ${attr} rows="1" class="${cls}" placeholder="${esc(ph)}" spellcheck="false">${esc(val)}</textarea>`;
-  return cls.includes('md') ? `<div class="rt"><div class="rt-bg" aria-hidden="true">${hl(val)}</div>${t}</div>` : t;
-};
-// 꾸민 글: **굵게** 는 외곽선으로 굵게 (글자 폭이 그대로여야 커서가 맞는다), 줄 맨 앞 '- ' 는 점
-function hl(s) {
-  return esc(s).split('\n').map(l => l.replace(/^(\s*)([-*+])(?= )/, '$1<span class="bul">$2</span>')
-    .replace(/\*\*(?=\S)(.+?)(?<=\S)\*\*/g, '<span class="mk">**</span><b>$1</b><span class="mk">**</span>')).join('\n');
+// class 에 md 가 있는 글칸은 cm.js 가 불러와지면 편집기로 바뀐다 (못 불러오면 그냥 입력칸)
+const ta = (attr, val, ph, cls = 'md') => `<textarea ${attr} rows="1" class="${cls}" placeholder="${esc(ph)}" spellcheck="false">${esc(val)}</textarea>`;
+const VIEWS = new Set();
+function enhance(root) {
+  if (!window.CM || !root) return;
+  root.querySelectorAll('textarea.md:not([hidden])').forEach(t => {
+    const v = CM.editor(t.value, t.placeholder, text => { t.value = text; t.dispatchEvent(new Event('input', { bubbles: true })); });
+    if (t.classList.contains('big')) v.dom.classList.add('big');
+    t.hidden = true; t.after(v.dom); VIEWS.add(v);
+  });
 }
+function drop(root) { for (const v of VIEWS) if (root.contains(v.dom)) { v.destroy(); VIEWS.delete(v); } }
 const CARDS = {
   'c-hero'() {
     const d = new Date(D.date + 'T12:00');
@@ -457,7 +436,7 @@ function mindCard(gi) {
       return `<div class="mind"><button type="button" class="mhead${f[m.check] === true ? ' on' : ''}" data-tog="${esc(m.check)}">#${esc(m.name)}<span class="sw"></span></button>
         ${open ? `<div class="mbody">${m.items.map(i => i.toggle
           ? `<button type="button" class="opt${f[i.toggle] === true ? ' on' : ''}" data-tog="${esc(i.toggle)}"><span class="box"></span>${esc(i.label)}</button>`
-          : (i.ask ? asks(i.ask) : '') + (i.field ? ta(`data-fm="${esc(i.field)}"`, f[i.field], '', 'md') : '')).join('')}</div>` : ''}</div>`;
+          : (i.ask ? asks(i.ask) : '') + (i.field ? ta(`data-fm="${esc(i.field)}"`, f[i.field], '') : '')).join('')}</div>` : ''}</div>`;
     }).join('')}</section>`;
 }
 Object.assign(CARDS, {
@@ -485,16 +464,20 @@ const cardHtml = id => id.startsWith('c-mind') ? mindCard(+id.slice(6)) : CARDS[
 function render() {
   const y = scrollY;
   const ids = ['c-hero', 'c-tasks', 'c-work', 'c-study', 'c-close', 'c-journal', ...mindGroups().map((_, i) => 'c-mind' + i), 'c-quote'];
+  drop($('#view'));
   $('#view').innerHTML = ids.map(cardHtml).join('');
   document.querySelectorAll('#view textarea').forEach(grow);
+  enhance($('#view'));
   scrollTo(0, y);
 }
 function draw(id) {
   const el = document.getElementById(id);
   if (!el) return;
   if (id === 'c-hero') document.getElementById('c-new')?.remove();
+  drop(el);
   el.outerHTML = cardHtml(id);
   document.querySelectorAll(`#${id} textarea`).forEach(grow);
+  enhance(document.getElementById(id));
 }
 
 /* ── 명언 정리 작업 (/명언) ── */
@@ -522,14 +505,12 @@ document.addEventListener('input', e => {
   const el = e.target;
   if (el.dataset.task) { const [k, i] = el.dataset.task.split(':'); T[k][+i].text = el.value; return saveTasks(k); }
   if (el.tagName === 'TEXTAREA') grow(el);
-  if (el.classList.contains('md')) el.previousElementSibling.innerHTML = hl(el.value);
   if (el.dataset.fm) setFm(el.dataset.fm, el.value);
   else if (el.dataset.sec) setSec(el.dataset.sec, el.value);
 });
 document.addEventListener('keydown', e => {
   const el = e.target;
   if (el.dataset?.task) return taskKey(e, el);
-  if (el.classList?.contains('md')) mdKey(e, el);
   if (e.key === 'Escape' && !$('#calendar').hidden) return openCal(false);
   if (e.key === 'Escape' && !$('#settings').hidden) return openSettings(false);
   if (!e.metaKey || !D) return;
@@ -648,6 +629,79 @@ function openSettings(on) { $('#settings').hidden = !on; }
 
 setTheme(theme); setColor(color);
 load(today());
+</script>
+<script type="module">
+// 글칸 편집기: 옵시디언 라이브 미리보기처럼 **굵게** 는 기호를 숨기고(커서가 그 안에 오면 보임), 줄 맨 앞 '- ' 는 점.
+// 글 자체는 마크다운 그대로라 노트에 저장되는 내용은 같다.
+import { EditorState, EditorView, keymap, placeholder, Decoration, ViewPlugin, WidgetType, history, historyKeymap, defaultKeymap } from '/cm.js';
+
+class Bullet extends WidgetType {
+  toDOM() { const s = document.createElement('span'); s.className = 'cm-bul'; s.textContent = '•'; return s; }
+  eq() { return true; }
+}
+const BUL = Decoration.replace({ widget: new Bullet() }), HIDE = Decoration.replace({}),
+  MK = Decoration.mark({ class: 'cm-mk' }), B = Decoration.mark({ class: 'cm-b' });
+const LIST = /^(\s*)([-*+]) (\[[ xX]\] )?/, BOLD = /\*\*(?=\S)(.+?)(?<=\S)\*\*/g;
+
+function decos(view) {
+  const out = [], sel = view.state.selection.ranges, doc = view.state.doc;
+  for (const { from, to } of view.visibleRanges) {
+    for (let pos = from; pos <= to;) {
+      const line = doc.lineAt(pos), m = line.text.match(LIST);
+      if (m) out.push(BUL.range(line.from + m[1].length, line.from + m[1].length + 1));
+      for (const b of line.text.matchAll(BOLD)) {
+        const a = line.from + b.index, z = a + b[0].length, mark = sel.some(r => r.from <= z && r.to >= a) ? MK : HIDE;
+        out.push(mark.range(a, a + 2), B.range(a + 2, z - 2), mark.range(z - 2, z));
+      }
+      pos = line.to + 1;
+    }
+  }
+  return Decoration.set(out, true);
+}
+const live = ViewPlugin.fromClass(class {
+  constructor(v) { this.decorations = decos(v); }
+  update(u) { if (u.docChanged || u.viewportChanged || u.selectionSet) this.decorations = decos(u.view); }
+}, { decorations: v => v.decorations });
+
+// Enter: 목록이면 다음 줄도 '- ' (빈 항목에서 Enter 는 목록 끝), 아니면 들여쓰기만 이어서
+function enter(v) {
+  const s = v.state, r = s.selection.main, line = s.doc.lineAt(r.head), m = line.text.match(LIST);
+  if (m && r.empty && line.text.length === m[0].length) { v.dispatch({ changes: { from: line.from, to: line.to } }); return true; }
+  const ins = '\n' + (m && r.head >= line.from + m[0].length ? m[1] + m[2] + ' ' + (m[3] ? '[ ] ' : '') : line.text.match(/^\s*/)[0]);
+  v.dispatch({ ...s.replaceSelection(ins), scrollIntoView: true, userEvent: 'input' });
+  return true;
+}
+// Tab / Shift-Tab: 줄 맨 앞에 탭 (옵시디언과 같은 들여쓰기)
+function indent(v, back) {
+  const s = v.state, r = s.selection.main, changes = [];
+  for (let n = s.doc.lineAt(r.from).number; n <= s.doc.lineAt(r.to).number; n++) {
+    const line = s.doc.line(n), w = line.text.match(/^(\t| {1,4})/);
+    if (!back) changes.push({ from: line.from, insert: '\t' });
+    else if (w) changes.push({ from: line.from, to: line.from + w[0].length });
+  }
+  v.dispatch({ changes, userEvent: 'input' });
+  return true;
+}
+// ⌘B: 굵게 / 이미 굵게면 풀기
+function bold(v) {
+  const s = v.state, r = s.selection.main, d = s.doc;
+  if (d.sliceString(r.from - 2, r.from) === '**' && d.sliceString(r.to, r.to + 2) === '**')
+    v.dispatch({ changes: [{ from: r.from - 2, to: r.from }, { from: r.to, to: r.to + 2 }], selection: { anchor: r.from - 2, head: r.to - 2 } });
+  else v.dispatch({ changes: [{ from: r.from, insert: '**' }, { from: r.to, insert: '**' }], selection: { anchor: r.from + 2, head: r.to + 2 } });
+  return true;
+}
+
+window.CM = {
+  editor: (text, ph, onChange) => new EditorView({ state: EditorState.create({ doc: text, extensions: [
+    history(),
+    keymap.of([{ key: 'Enter', run: enter }, { key: 'Tab', run: v => indent(v, false), shift: v => indent(v, true) }, { key: 'Mod-b', run: bold },
+      ...historyKeymap, ...defaultKeymap]),
+    EditorView.lineWrapping, EditorState.tabSize.of(4), placeholder(ph), live,
+    EditorView.contentAttributes.of({ spellcheck: 'false', autocorrect: 'off', autocapitalize: 'off' }),
+    EditorView.updateListener.of(u => { if (u.docChanged) onChange(u.state.doc.toString()); }),
+  ] }) }),
+};
+enhance(document.getElementById('view'));
 </script>
 </body>
 </html>
