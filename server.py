@@ -405,10 +405,9 @@ def run_quote(d):
     SYNC_WAKE.set()                   # 번역·저자가 붙은 노트를 폰에도
 
 
-# ── 폰 연동: Apps Script 가 우체통. 맥은 최근 노트를 올리고, 폰에서 고친 칸을 받아 볼트에 쓴다 ─────
+# ── 폰 연동: Apps Script 가 우체통. 맥은 모든 데일리 노트를 올리고(바뀐 것만), 폰에서 고친 칸을 받아 볼트에 쓴다 ─────
 
 SYNC_URL = os.environ.get('SYNC_URL') or 'https://script.google.com/macros/s/AKfycbwAzbhrtPtjrd8KVQuFTFXfgLmzY4Cgsk-DZlF2ur3b6a7hU_LMQOaKddSt-0O9mOIP/exec'
-WINDOW = 35                               # 폰에 올리는 날: 35일 전 ~ 7일 뒤 (index.html 의 WINDOW 와 같게)
 SYNC_STATE = os.path.join(VAULT, '.daily-sync.json') if os.environ.get('VAULT') else os.path.join(HERE, 'sync', 'state.json')   # 올린 노트의 mtime·받은 수정 확인 (git 제외)
 SYNC = {'at': 0, 'err': ''}
 SYNC_WAKE = threading.Event()
@@ -451,9 +450,7 @@ def sync_post(body):
 
 def sync_once(code):
     st = load_json(SYNC_STATE, {})
-    t, dates = date.today(), note_dates()
-    lo, hi = (t - timedelta(days=WINDOW)).isoformat(), (t + timedelta(days=7)).isoformat()
-    keep = [d for d in dates if lo <= d <= hi]
+    keep = dates = note_dates()
     mt = {d: os.path.getmtime(path(day(d))) for d in keep}
     mind = mind_form()
     dh, mh = (hashlib.sha1(json.dumps(x, ensure_ascii=False).encode()).hexdigest() for x in (dates, mind))

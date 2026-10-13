@@ -259,6 +259,7 @@ footer { margin-top:24px; }
 @media (max-width:599px) { .panel { align-items:flex-end; } .panel .sheet { border-radius:20px 20px 0 0; padding-bottom:calc(18px + env(safe-area-inset-bottom, 0px)); max-height:calc(100dvh - 24px - env(safe-area-inset-top, 0px)); } }
 .sync-in { display:flex; gap:8px; margin-top:10px; }
 .sync-in .line { flex:1; min-width:0; font-family:var(--num); letter-spacing:.12em; text-transform:uppercase; }
+.sync-in .line.plain { font-family:inherit; letter-spacing:normal; text-transform:none; }
 .upd { position:fixed; left:var(--gut); right:var(--gut); bottom:calc(20px + env(safe-area-inset-bottom, 0px)); z-index:35; padding:13px; font-size:15px; font-weight:700; border:0; border-radius:12px; background:var(--acc); color:#fff; box-shadow:0 6px 20px color-mix(in srgb, var(--acc) 35%, transparent); }
 .ver { margin:0; text-align:right; font-family:Oswald, sans-serif; font-size:11px; letter-spacing:.06em; color:var(--mute); }
 #toast { position:fixed; left:var(--gut); right:var(--gut); bottom:calc(20px + env(safe-area-inset-bottom, 0px)); z-index:40; padding:13px; border-radius:12px; background:var(--toast); color:#fff; font-weight:600; text-align:center; opacity:0; transition:opacity .2s; pointer-events:none; }
@@ -285,6 +286,8 @@ footer { margin-top:24px; }
   <div class="settings-row col"><div><b>테마 색</b><p id="colorName"></p></div><div class="swatches" id="colorPick"></div></div>
   <div class="settings-row col"><div><b>폰 연동</b><p id="syncInfo"></p></div>
     <div class="sync-in phone-only"><input id="syncCode" class="line" placeholder="연결 코드" autocomplete="off" autocapitalize="characters" spellcheck="false"><button type="button" class="pill" data-act="link">연결</button></div></div>
+  <div class="settings-row col phone-only"><div><b>옵시디언 볼트 이름</b><p>'옵시디언에서 열기'가 폰의 이 볼트를 열어요</p></div>
+    <div class="sync-in"><input id="vaultName" class="line plain" placeholder="obsidian phone" autocomplete="off" autocapitalize="off" spellcheck="false"></div></div>
 </div></div>
 <div id="calendar" class="panel" role="dialog" aria-modal="true" aria-label="달력" hidden><div class="sheet cal" id="calBody"></div></div>
 <div id="toast" role="status" aria-live="polite"></div>
@@ -302,13 +305,13 @@ function api(u, body) {
   return fetch(u, o).then(async r => { const j = await r.json(); if (!r.ok) throw new Error(j.error || r.status); return j; });
 }
 /* ── 폰: 맥 서버 대신 동기화 서버(Apps Script, sync/Code.js)를 우체통으로 쓴다.
-   최근 노트(맥이 올린 35일 전 ~ 7일 뒤)는 폰에도 보관하고, 고친 칸은 보내 두면 맥이 볼트에 쓴다 ── */
+   맥이 모든 노트를 올려 두고, 폰은 최근 60일과 열어 본 노트를 보관한다(예전 노트는 열 때 받아 옴). 고친 칸은 보내 두면 맥이 볼트에 쓴다 ── */
 const APP_VERSION = '26.10.14-1';                                     // 올릴 때마다 version.json · sw.js 와 같이 올린다
 const LOCAL = /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
 const PHONE = location.protocol === 'https:' || (LOCAL && location.search.includes('phone'));   // ?phone = 맥에서 폰 화면 시험
 // 맥에서 폰 화면을 시험할 때는 늘 가짜 연동 서버(node sync/test_sync.mjs --serve)로만 — 진짜 노트에 시험 글이 섞이지 않게
 const SYNC_URL = LOCAL ? 'http://127.0.0.1:8751/' : 'https://script.google.com/macros/s/AKfycbwAzbhrtPtjrd8KVQuFTFXfgLmzY4Cgsk-DZlF2ur3b6a7hU_LMQOaKddSt-0O9mOIP/exec';
-const WINDOW = 35;                                                    // server.py 의 WINDOW 와 같게
+const RECENT = 60;                                                    // 폰에 늘 보관하는 날 (sync/Code.js 의 RECENT 와 같게)
 if (PHONE) document.documentElement.classList.add('phone');
 let SY = {}, OUT = {};                                                // SY = 맥이 올린 노트 보관본, OUT = 아직 못 보낸 폰 수정
 try { SY = JSON.parse(localStorage.getItem('dn.sync')) || {}; OUT = JSON.parse(localStorage.getItem('dn.out')) || {}; } catch (e) {}
@@ -321,11 +324,16 @@ function weekNo(s) {                                                  // 옵시�
   const j1 = new Date(sat.getFullYear(), 0, 1, 12), first = new Date(j1); first.setDate(j1.getDate() - j1.getDay());
   return Math.round((sun - first) / 864e5 / 7) + 1;
 }
-function phoneDay(d) {
+async function phoneDay(d) {
   if (!SY.code) throw new Error('설정 > 폰 연동에 맥 앱에 나온 연결 코드를 넣어 주세요');
+  if (!SY.docs[d] && (SY.dates || []).includes(d)) {                  // 폰에 없는 예전 노트는 열 때 받아 온다
+    const r = await post({ op: 'docs', dates: [d] }).catch(() => ({}));
+    if (!r.docs?.[d]) throw new Error('인터넷에 연결되면 이 날 노트를 받아 와요');
+    SY.docs[d] = r.docs[d];
+  }
+  if (SY.docs[d]) { (SY.seen ||= {})[d] = Date.now(); keepSY(); }
   let n = SY.docs[d] ? JSON.parse(JSON.stringify(SY.docs[d])) : null;
   if (!n) {
-    if (d < shift(today(), -WINDOW) && (SY.dates || []).includes(d)) throw new Error('5주보다 오래된 노트는 맥 앱에서 열어 주세요');
     const y = SY.docs[shift(d, -1)];
     n = { date: d, exists: false, fm: {}, sec: { tomorrow: '', today: y?.sec?.tomorrow || '', journal: '' }, quote: { state: 'new' }, author: null };
   }
@@ -340,6 +348,8 @@ function phoneSave(b) {
   keepSY(); clearTimeout(pushT); pushT = setTimeout(() => syncPhone().then(phoneRefresh, () => {}), 1200);
   return { ok: true, created: false, mtime: D?.mtime || 0 };
 }
+// 폰의 옵시디언 볼트 이름 (맥 볼트를 받아 쓰는 폰 볼트. 설정에서 바꾼다)
+const vaultName = () => { try { return localStorage.getItem('dn.vault') || 'obsidian phone'; } catch (e) { return 'obsidian phone'; } };
 let pushT = 0, busy = null;
 function syncPhone() {
   if (!SY.code) return Promise.reject(new Error('code'));
@@ -356,17 +366,19 @@ function syncPhone() {
     Object.assign(SY.docs, r.docs);
     if (r.dates) SY.dates = r.dates;
     if (r.mind) SY.mind = r.mind;
-    for (const d in SY.docs) if (d < shift(today(), -WINDOW - 7)) delete SY.docs[d];
+    const lo = shift(today(), -RECENT), seen = Object.keys(SY.seen || {}).sort((a, b) => SY.seen[b] - SY.seen[a]).slice(0, 40);
+    for (const d in SY.docs) if (d < lo && !seen.includes(d)) delete SY.docs[d];     // 예전 노트는 최근에 연 40개만 남긴다
+    SY.seen = Object.fromEntries(seen.map(d => [d, SY.seen[d]]));
     Object.assign(SY, { wait: r.wait, macAt: r.macAt, rev: r.rev, at: Date.now(), err: '' });
     keepSY();
     return r;
   })().catch(e => { SY.err = e.message === 'code' ? 'code' : 'net'; keepSY(); throw e; }).finally(() => { busy = null; }));
 }
 const syncText = d => OUT[d] ? '폰에 저장 · 보내는 중' : SY.wait?.[d] ? '맥 반영 대기' : SY.err ? '연결 안 됨 · 폰에 저장' : SY.at ? '맥과 맞춤 ' + hm(SY.at) : '';
-function phoneRefresh(r) {                                            // 받은 노트로 화면 맞추기 (쓰는 중이면 상태만)
+async function phoneRefresh(r) {                                      // 받은 노트로 화면 맞추기 (쓰는 중이면 상태만)
   if (!D) return load(want || today());
   const typing = pending() || saving || OUT[D.date] || document.activeElement?.closest?.('#view');
-  if (r?.docs?.[D.date] && !typing) { D = phoneDay(D.date); T = { today: parseTasks(D.sec.today), tomorrow: parseTasks(D.sec.tomorrow) }; stateText = syncText(D.date); render(); }
+  if (r?.docs?.[D.date] && !typing) { D = await phoneDay(D.date); T = { today: parseTasks(D.sec.today), tomorrow: parseTasks(D.sec.tomorrow) }; stateText = syncText(D.date); render(); }
   else if (!pending() && !saving) state(syncText(D.date));
 }
 if (PHONE) api = async (u, body) => {
@@ -375,7 +387,7 @@ if (PHONE) api = async (u, body) => {
   if (p === '/api/save') return phoneSave(body);
   if (p === '/api/days') return { dates: [...new Set([...(SY.dates || []), ...Object.keys(SY.docs).filter(d => SY.docs[d].exists), ...Object.keys(OUT)])] };
   if (p === '/api/job') return { state: 'idle' };
-  if (p === '/api/open') { location.href = 'obsidian://open?vault=Obsidian_Dongkyu&file=' + encodeURIComponent(body.rel); return { ok: true }; }
+  if (p === '/api/open') { location.href = `obsidian://open?vault=${encodeURIComponent(vaultName())}&file=${encodeURIComponent(body.rel)}`; return { ok: true }; }
   throw new Error('명언 정리는 맥에서 해요');
 };
 
@@ -689,6 +701,7 @@ $('#calendar').addEventListener('click', e => {
   else if (b.dataset.calm) { const [y, m] = calYm.split('-').map(Number), n = +b.dataset.calm; calYm = n ? ymd(new Date(y, m - 1 + n, 1)).slice(0, 7) : today().slice(0, 7); drawCal(); }
 });
 $('#settings').addEventListener('click', e => { if (e.target.id === 'settings') openSettings(false); });
+$('#vaultName').addEventListener('change', e => { try { localStorage.setItem('dn.vault', e.target.value.trim()); } catch (x) {} toast('볼트 이름을 바꿨어요'); });
 // 옵시디언에서 고치고 돌아오면 새로 읽는다 (쓰는 중이 아닐 때만)
 addEventListener('focus', async () => {
   if (!D || pending() || saving) return;
@@ -748,6 +761,7 @@ async function drawSync() {
     return;
   }
   $('#syncCode').value = SY.code || '';
+  $('#vaultName').value = vaultName();
   $('#syncInfo').textContent = !SY.code ? '맥 앱 설정 > 폰 연동에 나온 연결 코드를 넣으면 맥의 데일리 노트와 이어져요'
     : SY.err === 'code' ? '연결 코드가 맞지 않아요' : SY.err ? '맞추지 못했어요 · 인터넷을 확인하세요 (쓴 것은 폰에 남아 있어요)'
     : `연결됨` + (SY.at ? ` · ${hm(SY.at)} 맞춤` : '') + (SY.macAt ? ` · 맥은 ${hm(SY.macAt)} 에 마지막으로 맞춤` : '');
