@@ -5,10 +5,10 @@
 - 노트가 없는 날은 쓰기 시작할 때 데일리 템플릿 그대로 만든다 (Templater 가 하던 일: 날짜 링크, 어제 Tomorrow's Tasks, 오늘의 명언)
 - 새 명언은 Claude Code 를 `claude -p "/명언 <날짜>"` 로 불러 번역·저자 노트까지 정리한다
 
-    python3 server.py          서버만 (127.0.0.1:8749)
-    VAULT=<사본 볼트> CLAUDE=<가짜 claude> python3 server.py    시험용
+    python3 server.py          서버만 (127.0.0.1:8749). 폰 연동(sync/Secret.js 가 있으면)도 같이 돈다
+    VAULT=<사본 볼트> CLAUDE=<가짜 claude> [SYNC_URL=<가짜 연동 서버>] python3 server.py    시험용 (사본 볼트면 진짜 연동 서버로는 안 보낸다)
 """
-import json, os, re, shutil, subprocess, threading, time, unicodedata, urllib.request
+import hashlib, json, os, re, shutil, subprocess, threading, time, unicodedata, urllib.request
 from datetime import date, timedelta
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs, quote
@@ -35,6 +35,8 @@ CLAUDE = os.environ.get('CLAUDE') or shutil.which('claude', path=ENV['PATH']) or
 # /명언 에 필요한 것만: 노트 읽고 쓰기, 저자·출처 조사, 초상 받기(portrait.py)
 TOOLS = 'Read Edit Write Glob Grep WebSearch WebFetch Bash(python3:*) Bash(ls:*)'
 FILE_LOCK = threading.Lock()
+STATIC = {'/cm.js': 'text/javascript; charset=utf-8', '/manifest.webmanifest': 'application/manifest+json',
+          '/icon-192.png': 'image/png', '/icon-512.png': 'image/png', '/apple-touch-icon.png': 'image/png'}
 
 
 # ── 날짜 · 파일 ───────────────────────────────────────────
@@ -136,7 +138,7 @@ def sec_set(lines, k, text):
     if k == 'study':
         new = ['> ' + l if l else '>' for l in text.split('\n')] if text.strip() else ['> ']
     else:
-        new = (text or {'today': NO_TASKS, 'journal': '- '}.get(k, '')).split('\n') + ['']
+        new = (text or (NO_TASKS if k == 'today' else '')).split('\n') + ['']
         if new == ['', '']:
             new = ['']
     return lines[:sp[0] + 1] + new + lines[sp[1]:]
@@ -284,6 +286,19 @@ def mind_form():
 
 # ── 읽기 · 저장 ───────────────────────────────────────────
 
+def ok_fm(k, v):
+    return bool(KEY.match(k)) and k not in ('date', 'type', 'tags') and (v is None or isinstance(v, (str, bool, int)))
+
+
+def ok_sec(k, v):
+    return k in SECS and isinstance(v, str)
+
+
+def note_dates():
+    names = os.listdir(DAILY) if os.path.isdir(DAILY) else []
+    return sorted(n[:10] for n in names if DATE.match(n[:10]) and n.endswith('.md'))
+
+
 def read_day(d):
     p = path(d)
     exists = os.path.exists(p)
@@ -387,6 +402,112 @@ def run_quote(d):
     JOB.update(state='done' if ok else 'error', ended=time.time())
     if not ok:
         JOB['result'] = JOB.get('result') or ''.join(tail)[-1500:] or f'종료 코드 {p.returncode}'
+    SYNC_WAKE.set()                   # 번역·저자가 붙은 노트를 폰에도
+
+
+# ── 폰 연동: Apps Script 가 우체통. 맥은 최근 노트를 올리고, 폰에서 고친 칸을 받아 볼트에 쓴다 ─────
+
+SYNC_URL = os.environ.get('SYNC_URL') or 'https://script.google.com/macros/s/AKfycbwAzbhrtPtjrd8KVQuFTFXfgLmzY4Cgsk-DZlF2ur3b6a7hU_LMQOaKddSt-0O9mOIP/exec'
+WINDOW = 35                               # 폰에 올리는 날: 35일 전 ~ 7일 뒤 (index.html 의 WINDOW 와 같게)
+SYNC_STATE = os.path.join(VAULT, '.daily-sync.json') if os.environ.get('VAULT') else os.path.join(HERE, 'sync', 'state.json')   # 올린 노트의 mtime·받은 수정 확인 (git 제외)
+SYNC = {'at': 0, 'err': ''}
+SYNC_WAKE = threading.Event()
+
+
+def sync_code():
+    try:
+        return re.search(r"CODE = '(\w+)'", open(os.path.join(HERE, 'sync', 'Secret.js'), encoding='utf-8').read()).group(1)
+    except (OSError, AttributeError):
+        return ''
+
+
+def phone_doc(d):
+    n = read_day(d)
+    if n['author']:
+        n['author'].pop('photo', None)    # 사진은 볼트 안에만
+    return json.loads(json.dumps(n, default=str))
+
+
+def same(a, b):
+    return ('' if a is None else a) == ('' if b is None else b)
+
+
+def pick(cur, mtime_ms, o):
+    """폰에서 고친 칸 중 볼트에 쓸 것. 맥에서도 그 칸을 고쳤으면(폰이 본 값 b 와 다르면) 나중에 고친 쪽이 이긴다"""
+    out, done = {'fm': {}, 'sec': {}}, []
+    for part, ok in (('fm', ok_fm), ('sec', ok_sec)):
+        for k, e in (o.get(part) or {}).items():
+            done.append([part, k, e.get('t')])
+            v, now = e.get('v'), cur[part].get(k)
+            if ok(k, v) and not same(now, v) and (same(now, e.get('b')) or (e.get('t') or 0) > mtime_ms):
+                out[part][k] = v
+    return out['fm'], out['sec'], done
+
+
+def sync_post(body):
+    r = urllib.request.Request(SYNC_URL, data=json.dumps(body, ensure_ascii=False, default=str).encode(), headers={'Content-Type': 'text/plain'})
+    return json.load(urllib.request.urlopen(r, timeout=40))
+
+
+def sync_once(code):
+    st = load_json(SYNC_STATE, {})
+    t, dates = date.today(), note_dates()
+    lo, hi = (t - timedelta(days=WINDOW)).isoformat(), (t + timedelta(days=7)).isoformat()
+    keep = [d for d in dates if lo <= d <= hi]
+    mt = {d: os.path.getmtime(path(day(d))) for d in keep}
+    mind = mind_form()
+    dh, mh = (hashlib.sha1(json.dumps(x, ensure_ascii=False).encode()).hexdigest() for x in (dates, mind))
+    body = {'code': code, 'op': 'mac', 'keep': keep, 'done': st.get('done', []),
+            'put': {d: phone_doc(day(d)) for d in keep if st.get('up', {}).get(d) != mt[d]}}
+    if st.get('dh') != dh:
+        body['dates'] = dates
+    if st.get('mh') != mh:
+        body['mind'] = mind
+    r = sync_post(body)
+    if r.get('err'):
+        raise RuntimeError('연결 코드가 맞지 않아요' if r['err'] == 'code' else r['err'])
+    st.update(up=mt, done=[], dh=dh, mh=mh)
+    for d, o in (r.get('ob') or {}).items():
+        if not DATE.match(d):
+            continue
+        cur = read_day(day(d))
+        fmc, secc, acks = pick(cur, cur['mtime'] * 1000, o)
+        if fmc or secc:
+            created, _ = save_day(day(d), fmc, secc)
+            if created:
+                start_quote(d)
+        st['done'] += [[d] + a for a in acks]
+    save_json(SYNC_STATE, st)
+    return bool(st['done'])               # 받은 게 있으면 곧바로 한 번 더 (볼트에 쓴 걸 올리고 받았다고 알린다)
+
+
+def save_json(p, data):
+    with open(p + '.tmp', 'w', encoding='utf-8') as f:
+        json.dump(data, f, ensure_ascii=False)
+    os.replace(p + '.tmp', p)
+
+
+def load_json(p, default):
+    try:
+        return json.load(open(p, encoding='utf-8'))
+    except (OSError, ValueError):
+        return default
+
+
+def sync_loop():
+    while True:
+        code, more = sync_code(), False
+        if code:
+            try:
+                more = sync_once(code)
+                SYNC.update(at=time.time(), err='')
+            except Exception as e:
+                SYNC['err'] = str(e)[:200]
+                print('폰 연동 실패:', e, flush=True)
+        if not more:
+            SYNC_WAKE.wait(30)                # 30초마다, 맥에서 저장하면 바로
+        SYNC_WAKE.clear()
+        time.sleep(2)                         # 쓰는 중 저장이 몰려도 2초에 한 번
 
 
 # ── HTTP ──────────────────────────────────────────────────
@@ -415,8 +536,8 @@ class H(BaseHTTPRequestHandler):
         q = {k: v[0] for k, v in parse_qs(u.query).items()}
         if u.path in ('/', '/index.html'):
             return self.send(200, open(os.path.join(HERE, 'index.html'), 'rb').read(), 'text/html; charset=utf-8')
-        if u.path == '/cm.js':               # 글칸 편집기 (build_cm.sh)
-            return self.send(200, open(os.path.join(HERE, 'cm.js'), 'rb').read(), 'text/javascript; charset=utf-8')
+        if u.path in STATIC:                 # 글칸 편집기(build_cm.sh)·폰 앱 아이콘
+            return self.send(200, open(os.path.join(HERE, u.path[1:]), 'rb').read(), STATIC[u.path])
         if u.path == '/api/day':
             if not DATE.match(q.get('date', '')):
                 return self.send(400, {'error': '날짜가 이상해요'})
@@ -430,8 +551,9 @@ class H(BaseHTTPRequestHandler):
                 start_quote(n['date'])        # 오늘 명언은 알아서 /명언
             return self.send(200, n)
         if u.path == '/api/days':            # 달력 점: 노트가 있는 날
-            names = os.listdir(DAILY) if os.path.isdir(DAILY) else []
-            return self.send(200, {'dates': sorted(n[:10] for n in names if DATE.match(n[:10]) and n.endswith('.md'))})
+            return self.send(200, {'dates': note_dates()})
+        if u.path == '/api/sync':            # 설정 시트: 폰 연결 코드·마지막으로 맞춘 때
+            return self.send(200, dict(SYNC, code=sync_code()))
         if u.path == '/api/job':
             j = dict(JOB)
             if j.get('started'):
@@ -460,8 +582,7 @@ class H(BaseHTTPRequestHandler):
             return self.send(400, {'error': '날짜가 이상해요'})
         if path_ == '/api/save':
             fmc, secc = body.get('fm') or {}, body.get('sec') or {}
-            if not all(KEY.match(k) and k not in ('date', 'type', 'tags') and (v is None or isinstance(v, (str, bool, int))) for k, v in fmc.items()) \
-                    or not all(k in SECS and isinstance(v, str) for k, v in secc.items()):
+            if not all(ok_fm(k, v) for k, v in fmc.items()) or not all(ok_sec(k, v) for k, v in secc.items()):
                 return self.send(400, {'error': '잘못된 요청'})
             try:
                 created, mtime = save_day(day(d), fmc, secc)
@@ -469,6 +590,7 @@ class H(BaseHTTPRequestHandler):
                 return self.send(500, {'error': str(e)})
             if created:
                 start_quote(d)                # 새 노트의 명언은 알아서 /명언
+            SYNC_WAKE.set()
             return self.send(200, {'ok': True, 'created': created, 'mtime': mtime})
         if path_ == '/api/quote':
             if not os.path.exists(path(day(d))):
@@ -492,4 +614,6 @@ if __name__ == '__main__':
         srv = ThreadingHTTPServer(('127.0.0.1', PORT), H)
     except OSError:
         raise SystemExit('이미 떠 있어요')
+    if not os.environ.get('VAULT') or os.environ.get('SYNC_URL'):      # 사본 볼트로 시험할 때는 가짜 연동 서버로만
+        threading.Thread(target=sync_loop, daemon=True).start()
     srv.serve_forever()

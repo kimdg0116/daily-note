@@ -1,4 +1,4 @@
-# 데일리 노트 (맥 전용)
+# 데일리 노트 (맥 앱 + 폰 앱)
 
 옵시디언 데일리 노트(`04 Life/Planner/Daily/YYYY-MM-DD(요일).md`)를 앱 화면으로 쓴다. 쓰는 대로(0.5초 뒤) 그 노트에 저장되고, 옵시디언에서 고쳐도 같은 노트다.
 
@@ -12,5 +12,13 @@
 - 마음 기록(#회고 ~ #강점체크) 칸은 템플릿을 읽어서 만든다 (템플릿의 `---` 로 나뉜 묶음마다 카드 하나). 템플릿에 질문을 더하면 앱에도 생긴다. 템플릿 위쪽(할 일·운동·하루 마무리)이나 Templater 코드를 바꾸면 `server.py` 도 같이 본다 (모르는 Templater 코드가 있으면 노트를 만들지 않고 알린다).
 - 명언: 새 노트를 만들 때, 그리고 오늘 노트에 정리 안 된 명언이 있으면 `claude -p "/명언 <날짜>"` 를 알아서 돌린다. 끝나면 번역·판정·저자 카드가 뜨고, 저자 노트는 옵시디언 `04 Life/명언/저자/` 에 있다.
 
-확인: `python3 test_note.py` (템플릿 렌더·칸 읽고 쓰기·명언 칸·마음 기록 양식)
-시험: `VAULT=<사본 볼트> CLAUDE=<가짜 claude> python3 server.py` 로 실제 볼트를 건드리지 않고 돌려 볼 수 있다.
+## 폰 앱 · 연동
+- 폰 앱 = 같은 `index.html` 을 GitHub Pages(`kimdg0116/daily-note`)로 띄운 홈 화면 앱. https 로 열리면 폰 모드가 된다 (manifest·sw.js·version.json, 앱 버전은 `APP_VERSION`·`sw.js`·`version.json` 세 곳 같이).
+- 연동은 토플 단어 앱처럼 Apps Script 우체통(`sync/Code.js`, 프로젝트 "데일리 노트 동기화"). 맥 `server.py` 가 30초마다(맥에서 저장하면 바로) 최근 노트(35일 전 ~ 7일 뒤)를 올리고, 폰에서 고친 칸을 받아 볼트에 쓴다. 맥이 꺼져 있으면 폰 수정은 우체통에 남았다가 맥 서버가 켜질 때 들어간다.
+- 같은 칸을 폰과 맥에서 둘 다 고쳤으면 나중에 고친 쪽이 이긴다 (`server.py` `pick`).
+- 연결 코드는 `sync/Secret.js` (git 제외). 맥 앱 설정 > 폰 연동에 보이고, 폰 앱 설정에 넣는다.
+- 연동 서버 반영: `cd sync && ~/Desktop/app/dosimetrist-calendar-server/tools/node_modules/.bin/clasp push -f && …/clasp redeploy AKfycbwAzbhrtPtjrd8KVQuFTFXfgLmzY4Cgsk-DZlF2ur3b6a7hU_LMQOaKddSt-0O9mOIP -d "설명"`
+- 맥에서 폰 화면 시험: `node sync/test_sync.mjs --serve`(가짜 우체통 8751) + `http://127.0.0.1:8749/?phone`. localhost 의 폰 모드는 늘 가짜 우체통으로만 간다 (진짜 노트에 시험 글이 섞이지 않게).
+
+확인: `python3 test_note.py` (템플릿 렌더·칸 읽고 쓰기·명언 칸·마음 기록 양식·폰 수정 고르기), `node sync/test_sync.mjs` (우체통)
+시험: `VAULT=<사본 볼트> CLAUDE=<가짜 claude> [SYNC_URL=http://127.0.0.1:8751] python3 server.py` 로 실제 볼트를 건드리지 않고 돌려 볼 수 있다.

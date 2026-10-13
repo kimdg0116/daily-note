@@ -4,9 +4,15 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>DAILY</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="데일리">
 <meta name="theme-color" content="#e3eeff" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#142039" media="(prefers-color-scheme: dark)">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="apple-touch-icon" href="./apple-touch-icon.png">
+<link rel="icon" type="image/png" href="./icon-192.png">
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 <link rel="preload" href="https://cdn.jsdelivr.net/gh/sun-typeface/SUIT@2.0.5/fonts/variable/woff2/SUIT-Variable.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="https://cdn.jsdelivr.net/npm/@fontsource-variable/oswald@5.1.1/files/oswald-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
@@ -124,6 +130,8 @@ button { font-family:inherit; cursor:pointer; }
 .brand { flex:none; margin-right:auto; }
 .datebtn { display:flex; align-items:center; gap:7px; height:32px; padding:0 12px; font-family:var(--num); font-size:15px; font-weight:600; border:1px solid var(--line); border-radius:999px; background:var(--card); color:var(--fg); }
 .datebtn svg { width:16px; height:16px; color:var(--acc); }
+@media (max-width:520px) { .brand { display:none; } .top { justify-content:flex-end; } .datebtn { margin-right:auto; } }
+.phone .mac-only, html:not(.phone) .phone-only { display:none !important; }
 .pill { flex:none; height:32px; padding:0 13px; font-size:13px; font-weight:700; border:1px solid var(--line); border-radius:999px; background:var(--card); color:var(--acc); }
 
 .card { background:var(--card); border:1px solid var(--card-border); border-radius:16px; padding:16px; margin-bottom:12px; box-shadow:var(--shadow); }
@@ -134,13 +142,14 @@ h3 .r { margin-left:auto; }
 textarea, .line { display:block; width:100%; padding:10px 12px; font:inherit; font-size:15px; line-height:1.6; border:1px solid var(--line); border-radius:12px; background:var(--bg); color:var(--fg); tab-size:4; outline:none; }
 textarea { min-height:46px; resize:none; overflow:hidden; }
 textarea.big { min-height:120px; }
+textarea, #view .cm-content { word-break:keep-all; }          /* 한글은 단어 단위로 줄바꿈 */
 textarea:focus, .line:focus { border-color:var(--acc); background:var(--card); }
 ::placeholder { color:color-mix(in srgb, var(--mute) 60%, transparent); }
 /* 글칸 편집기(CodeMirror): 옵시디언처럼 **굵게** 기호는 숨기고(커서가 그 안에 오면 흐리게 보임), 줄 맨 앞 '- ' 는 점 */
 #view .cm-editor { border:1px solid var(--line); border-radius:12px; background:var(--bg); font-size:15px; }
 #view .cm-editor.cm-focused { outline:none; border-color:var(--acc); background:var(--card); }
 #view .cm-editor .cm-scroller { font-family:inherit; line-height:1.6; }
-#view .cm-editor .cm-content { min-height:44px; padding:10px 0; color:var(--fg); caret-color:var(--fg); }
+#view .cm-editor .cm-content { -webkit-user-select:text; user-select:text; min-height:44px; padding:10px 0; color:var(--fg); caret-color:var(--fg); }
 #view .cm-editor.big .cm-content { min-height:118px; }
 #view .cm-editor .cm-line { padding:0 12px; }
 #view .cm-editor .cm-placeholder { color:color-mix(in srgb, var(--mute) 60%, transparent); }
@@ -153,6 +162,8 @@ textarea:focus, .line:focus { border-color:var(--acc); background:var(--card); }
 .hero .big { font-family:var(--num); font-size:44px; font-weight:600; line-height:1; color:var(--deep); }
 .hero .sub { font-size:14px; font-weight:700; color:var(--mute); }
 .hero .sub b { color:var(--fg); }
+.hero .sub { white-space:nowrap; }
+@media (max-width:520px) { .hero .yr { display:none; } .hero { gap:10px; } }
 .hero .state { margin-left:auto; padding:3px 10px; font-size:12px; font-weight:700; border-radius:999px; background:var(--soft); color:var(--acc); white-space:nowrap; }
 .hero .state.bad { background:color-mix(in srgb, var(--red) 15%, transparent); color:var(--red); }
 .newnote { margin:-4px 0 12px; padding:10px 14px; font-size:14px; border-radius:12px; background:var(--soft); color:var(--deep); }
@@ -244,6 +255,11 @@ textarea:focus, .line:focus { border-color:var(--acc); background:var(--card); }
 .cal-grid button.has::after { content:''; position:absolute; left:50%; bottom:9px; width:6px; height:6px; margin-left:-3px; border-radius:50%; background:var(--acc); }
 .cal-grid button.sel.has::after { background:#fff; }
 footer { margin-top:24px; }
+/* 폰: 시트는 아래에서 올라온다 (넓은 화면은 가운데) */
+@media (max-width:599px) { .panel { align-items:flex-end; } .panel .sheet { border-radius:20px 20px 0 0; padding-bottom:calc(18px + env(safe-area-inset-bottom, 0px)); max-height:calc(100dvh - 24px - env(safe-area-inset-top, 0px)); } }
+.sync-in { display:flex; gap:8px; margin-top:10px; }
+.sync-in .line { flex:1; min-width:0; font-family:var(--num); letter-spacing:.12em; text-transform:uppercase; }
+.upd { position:fixed; left:var(--gut); right:var(--gut); bottom:calc(20px + env(safe-area-inset-bottom, 0px)); z-index:35; padding:13px; font-size:15px; font-weight:700; border:0; border-radius:12px; background:var(--acc); color:#fff; box-shadow:0 6px 20px color-mix(in srgb, var(--acc) 35%, transparent); }
 .ver { margin:0; text-align:right; font-family:Oswald, sans-serif; font-size:11px; letter-spacing:.06em; color:var(--mute); }
 #toast { position:fixed; left:var(--gut); right:var(--gut); bottom:calc(20px + env(safe-area-inset-bottom, 0px)); z-index:40; padding:13px; border-radius:12px; background:var(--toast); color:#fff; font-weight:600; text-align:center; opacity:0; transition:opacity .2s; pointer-events:none; }
 #toast.show { opacity:.97; }
@@ -260,12 +276,15 @@ footer { margin-top:24px; }
   <button type="button" class="icon-btn" id="gear" aria-label="설정 열기"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg></button>
 </div>
 <main id="view"></main>
-<footer><p class="ver">⌘[ ⌘] 날짜 이동 · ⌘T 오늘 · 쓰는 대로 옵시디언 노트에 저장</p><p class="ver">© Dongkyu Kim</p></footer>
+<footer><p class="ver mac-only">⌘[ ⌘] 날짜 이동 · ⌘T 오늘 · 쓰는 대로 옵시디언 노트에 저장</p><p class="ver phone-only">폰에서 쓴 것은 맥이 켜져 있을 때 옵시디언 노트에 들어가요</p><p class="ver" id="ver"></p><p class="ver">© Dongkyu Kim</p></footer>
+<button type="button" id="upd" class="upd" hidden>새 버전이 있습니다 · 눌러서 새로고침</button>
 
 <div id="settings" class="panel" role="dialog" aria-modal="true" aria-labelledby="setTitle" hidden><div class="sheet">
   <div class="head"><h3 id="setTitle">설정</h3><button type="button" data-act="closeSet">닫기</button></div>
   <div class="settings-row"><div><b>화면 모드</b><p id="themeMode"></p></div><button type="button" id="theme" class="icon-btn" aria-label="화면 모드 변경"></button></div>
   <div class="settings-row col"><div><b>테마 색</b><p id="colorName"></p></div><div class="swatches" id="colorPick"></div></div>
+  <div class="settings-row col"><div><b>폰 연동</b><p id="syncInfo"></p></div>
+    <div class="sync-in phone-only"><input id="syncCode" class="line" placeholder="연결 코드" autocomplete="off" autocapitalize="characters" spellcheck="false"><button type="button" class="pill" data-act="link">연결</button></div></div>
 </div></div>
 <div id="calendar" class="panel" role="dialog" aria-modal="true" aria-label="달력" hidden><div class="sheet cal" id="calBody"></div></div>
 <div id="toast" role="status" aria-live="polite"></div>
@@ -277,11 +296,89 @@ const dash = s => String(s ?? '').replace(/[—–−]/g, '-');          // 앱 
 const ymd = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 const today = () => ymd(new Date());
 const shift = (s, n) => { const d = new Date(s + 'T12:00'); d.setDate(d.getDate() + n); return ymd(d); };
-const hm = () => { const d = new Date(); return d.getHours() + ':' + String(d.getMinutes()).padStart(2, '0'); };
+const hm = (t = Date.now()) => { const d = new Date(t); return (ymd(d) === today() ? '' : `${d.getMonth() + 1}/${d.getDate()} `) + d.getHours() + ':' + String(d.getMinutes()).padStart(2, '0'); };
 function api(u, body) {
   const o = body ? { method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json', 'X-App': 'daily-note' }, body: JSON.stringify(body) } : {};
   return fetch(u, o).then(async r => { const j = await r.json(); if (!r.ok) throw new Error(j.error || r.status); return j; });
 }
+/* ── 폰: 맥 서버 대신 동기화 서버(Apps Script, sync/Code.js)를 우체통으로 쓴다.
+   최근 노트(맥이 올린 35일 전 ~ 7일 뒤)는 폰에도 보관하고, 고친 칸은 보내 두면 맥이 볼트에 쓴다 ── */
+const APP_VERSION = '26.10.14-1';                                     // 올릴 때마다 version.json · sw.js 와 같이 올린다
+const LOCAL = /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
+const PHONE = location.protocol === 'https:' || (LOCAL && location.search.includes('phone'));   // ?phone = 맥에서 폰 화면 시험
+// 맥에서 폰 화면을 시험할 때는 늘 가짜 연동 서버(node sync/test_sync.mjs --serve)로만 — 진짜 노트에 시험 글이 섞이지 않게
+const SYNC_URL = LOCAL ? 'http://127.0.0.1:8751/' : 'https://script.google.com/macros/s/AKfycbwAzbhrtPtjrd8KVQuFTFXfgLmzY4Cgsk-DZlF2ur3b6a7hU_LMQOaKddSt-0O9mOIP/exec';
+const WINDOW = 35;                                                    // server.py 의 WINDOW 와 같게
+if (PHONE) document.documentElement.classList.add('phone');
+let SY = {}, OUT = {};                                                // SY = 맥이 올린 노트 보관본, OUT = 아직 못 보낸 폰 수정
+try { SY = JSON.parse(localStorage.getItem('dn.sync')) || {}; OUT = JSON.parse(localStorage.getItem('dn.out')) || {}; } catch (e) {}
+SY.docs = SY.docs || {};
+function keepSY() { try { localStorage.setItem('dn.sync', JSON.stringify(SY)); localStorage.setItem('dn.out', JSON.stringify(OUT)); } catch (e) {} }
+const post = body => fetch(SYNC_URL, { method: 'POST', body: JSON.stringify({ code: SY.code, ...body }) }).then(r => r.json());
+function weekNo(s) {                                                  // 옵시디언(moment ko)과 같은 주: 일요일 시작, 1월 1일이 든 주가 1주
+  const d = new Date(s + 'T12:00'), sun = new Date(d); sun.setDate(d.getDate() - d.getDay());
+  const sat = new Date(sun); sat.setDate(sun.getDate() + 6);
+  const j1 = new Date(sat.getFullYear(), 0, 1, 12), first = new Date(j1); first.setDate(j1.getDate() - j1.getDay());
+  return Math.round((sun - first) / 864e5 / 7) + 1;
+}
+function phoneDay(d) {
+  if (!SY.code) throw new Error('설정 > 폰 연동에 맥 앱에 나온 연결 코드를 넣어 주세요');
+  let n = SY.docs[d] ? JSON.parse(JSON.stringify(SY.docs[d])) : null;
+  if (!n) {
+    if (d < shift(today(), -WINDOW) && (SY.dates || []).includes(d)) throw new Error('5주보다 오래된 노트는 맥 앱에서 열어 주세요');
+    const y = SY.docs[shift(d, -1)];
+    n = { date: d, exists: false, fm: {}, sec: { tomorrow: '', today: y?.sec?.tomorrow || '', journal: '' }, quote: { state: 'new' }, author: null };
+  }
+  Object.assign(n, { name: n.name || `${d}(${WD[new Date(d + 'T12:00').getDay()]})`, week: n.week || weekNo(d), mtime: n.mtime || 0, mind: SY.mind || [], today: today() });
+  for (const part of ['fm', 'sec']) for (const k in (OUT[d]?.[part] || {})) n[part][k] = OUT[d][part][k].v;
+  return n;
+}
+function phoneSave(b) {
+  const o = OUT[b.date] || (OUT[b.date] = { fm: {}, sec: {} }), doc = SY.docs[b.date];
+  for (const part of ['fm', 'sec']) for (const k in (b[part] || {}))
+    o[part][k] = { v: b[part][k], b: o[part][k] ? o[part][k].b : (doc?.[part]?.[k] ?? null) };      // b = 고치기 전 값 (맥이 둘 다 고쳤는지 볼 때 쓴다)
+  keepSY(); clearTimeout(pushT); pushT = setTimeout(() => syncPhone().then(phoneRefresh, () => {}), 1200);
+  return { ok: true, created: false, mtime: D?.mtime || 0 };
+}
+let pushT = 0, busy = null;
+function syncPhone() {
+  if (!SY.code) return Promise.reject(new Error('code'));
+  return busy || (busy = (async () => {
+    for (const d of Object.keys(OUT)) {
+      const sent = JSON.stringify(OUT[d]), body = { op: 'edit', date: d, t: Date.now(), fm: OUT[d].fm, sec: OUT[d].sec };
+      const r = await post(body);
+      if (r.err) throw new Error(r.err);
+      if (JSON.stringify(OUT[d]) === sent) delete OUT[d];            // 보내는 사이 또 고쳤으면 남겨 두고 다음에
+      keepSY();
+    }
+    const r = await post({ op: 'get', since: SY.rev || 0 });
+    if (r.err) throw new Error(r.err);
+    Object.assign(SY.docs, r.docs);
+    if (r.dates) SY.dates = r.dates;
+    if (r.mind) SY.mind = r.mind;
+    for (const d in SY.docs) if (d < shift(today(), -WINDOW - 7)) delete SY.docs[d];
+    Object.assign(SY, { wait: r.wait, macAt: r.macAt, rev: r.rev, at: Date.now(), err: '' });
+    keepSY();
+    return r;
+  })().catch(e => { SY.err = e.message === 'code' ? 'code' : 'net'; keepSY(); throw e; }).finally(() => { busy = null; }));
+}
+const syncText = d => OUT[d] ? '폰에 저장 · 보내는 중' : SY.wait?.[d] ? '맥 반영 대기' : SY.err ? '연결 안 됨 · 폰에 저장' : SY.at ? '맥과 맞춤 ' + hm(SY.at) : '';
+function phoneRefresh(r) {                                            // 받은 노트로 화면 맞추기 (쓰는 중이면 상태만)
+  if (!D) return load(want || today());
+  const typing = pending() || saving || OUT[D.date] || document.activeElement?.closest?.('#view');
+  if (r?.docs?.[D.date] && !typing) { D = phoneDay(D.date); T = { today: parseTasks(D.sec.today), tomorrow: parseTasks(D.sec.tomorrow) }; stateText = syncText(D.date); render(); }
+  else if (!pending() && !saving) state(syncText(D.date));
+}
+if (PHONE) api = async (u, body) => {
+  const [p, qs] = u.split('?');
+  if (p === '/api/day') return phoneDay(new URLSearchParams(qs).get('date'));
+  if (p === '/api/save') return phoneSave(body);
+  if (p === '/api/days') return { dates: [...new Set([...(SY.dates || []), ...Object.keys(SY.docs).filter(d => SY.docs[d].exists), ...Object.keys(OUT)])] };
+  if (p === '/api/job') return { state: 'idle' };
+  if (p === '/api/open') { location.href = 'obsidian://open?vault=Obsidian_Dongkyu&file=' + encodeURIComponent(body.rel); return { ok: true }; }
+  throw new Error('명언 정리는 맥에서 해요');
+};
+
 let toastT = 0;
 function toast(m) { const t = $('#toast'); t.textContent = m; t.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), 2600); }
 
@@ -294,13 +391,13 @@ async function load(d) {
   await flush();
   want = d;
   const t = new Date(d + 'T12:00');
-  $('#dateText').textContent = `${t.getFullYear()}. ${t.getMonth() + 1}. ${t.getDate()}. (${WD[t.getDay()]})`;
+  $('#dateText').textContent = (innerWidth < 520 ? '' : t.getFullYear() + '. ') + `${t.getMonth() + 1}. ${t.getDate()}. (${WD[t.getDay()]})`;
   let n;
   try { n = await api('/api/day?date=' + d); }
   catch (e) { $('#view').innerHTML = `<div class="card"><p class="muted">노트를 열지 못했어요 · ${esc(e.message)}</p></div>`; return; }
   if (want !== d) return;                                              // 그새 다른 날짜를 눌렀다
   D = n; T = { today: parseTasks(D.sec.today), tomorrow: parseTasks(D.sec.tomorrow) };
-  stateText = D.exists ? '' : '새 노트';
+  stateText = PHONE ? syncText(d) || (D.exists ? '' : '새 노트') : D.exists ? '' : '새 노트';
   render();
   watchJob();
 }
@@ -314,7 +411,7 @@ async function flush() {
   const body = { date: D.date, fm: dirty.fm, sec: dirty.sec };
   dirty = { fm: {}, sec: {} };
   saving = api('/api/save', body).then(r => {
-    D.mtime = r.mtime; state('저장됨 ' + hm());
+    D.mtime = r.mtime; state(PHONE ? '폰에 저장 · 보내는 중' : '저장됨 ' + hm());
     if (r.created) { D.exists = true; draw('c-hero'); toast('옵시디언에 오늘 노트를 만들었어요'); refreshQuote(); }
   }).catch(e => {
     dirty = { fm: { ...body.fm, ...dirty.fm }, sec: { ...body.sec, ...dirty.sec } };
@@ -396,8 +493,8 @@ const CARDS = {
   'c-hero'() {
     const d = new Date(D.date + 'T12:00');
     return `<section class="card hero" id="c-hero"><div><div class="big">${d.getMonth() + 1}.${String(d.getDate()).padStart(2, '0')}</div></div>
-      <div class="sub"><b>${WD[d.getDay()]}요일</b> · ${d.getFullYear()} · ${D.week}주</div><span class="state">${esc(stateText || (D.exists ? '노트 있음' : '새 노트'))}</span></section>
-      ${D.exists ? '' : '<p class="newnote" id="c-new">아직 이 날 노트가 없어요. 쓰기 시작하면 데일리 템플릿 그대로 옵시디언에 만들어져요.</p>'}`;
+      <div class="sub"><b>${WD[d.getDay()]}요일</b><span class="yr"> · ${d.getFullYear()}</span> · ${D.week}주</div><span class="state">${esc(stateText || (D.exists ? '노트 있음' : '새 노트'))}</span></section>
+      ${D.exists ? '' : `<p class="newnote" id="c-new">아직 이 날 노트가 없어요. 쓰기 시작하면 ${PHONE ? '맥이' : ''} 데일리 템플릿 그대로 옵시디언에 만들어${PHONE ? '요' : '져요'}.</p>`}`;
   },
   'c-tasks'() {
     return `<section class="card" id="c-tasks"><h3>오늘 할 일</h3>${taskRows('today')}<h3>내일 할 일</h3>${taskRows('tomorrow')}</section>`;
@@ -418,11 +515,11 @@ const CARDS = {
   'c-close'() {
     return `<section class="card" id="c-close"><h3>하루 마무리</h3><div class="mood-row"><span class="lbl">기분</span>
       <div class="moods">${[1, 2, 3, 4, 5].map(n => `<button type="button" data-mood="${n}" class="${D.fm.mood == n ? 'on' : ''}">${n}</button>`).join('')}</div></div>
-      <span class="lbl">오늘의 한 줄</span><input class="line" data-fm="highlight" value="${esc(D.fm.highlight)}" placeholder="오늘을 한 줄로"></section>`;
+      <span class="lbl">오늘의 한 줄</span>${ta('data-fm="highlight"', D.fm.highlight, '오늘을 한 줄로', 'oneline')}</section>`;
   },
   'c-journal'() {
     if (D.sec.journal == null) return '<span id="c-journal" hidden></span>';
-    return `<section class="card" id="c-journal"><h3>Journal</h3>${ta('data-sec="journal"', D.sec.journal, '- 오늘 있었던 일', 'md big')}</section>`;
+    return `<section class="card" id="c-journal"><h3>Journal</h3>${ta('data-sec="journal"', D.sec.journal, '오늘 있었던 일', 'md big')}</section>`;
   },
 };
 // 마음 기록: 템플릿의 --- 로 나뉜 묶음마다 카드 하나
@@ -443,15 +540,16 @@ Object.assign(CARDS, {
   'c-quote'() {
     const q = D.quote, a = D.author, run = J.state === 'running' && J.date === D.date, fail = J.state === 'error' && J.date === D.date;
     let h = '';
-    if (q.state === 'new') h = '<p class="muted">노트를 만들 때 오늘의 명언을 받아 오고, 번역과 저자 정리는 알아서 해요</p>';
+    if (q.state === 'new') h = `<p class="muted">노트를 만들 때 ${PHONE ? '맥이 ' : ''}오늘의 명언을 받아 오고, 번역과 저자 정리는 알아서 해요</p>`;
     else if (q.state === 'none') h = '<p class="muted">이 날 노트에는 명언 칸이 없어요</p>';
-    else if (q.state === 'failed') h = `<p class="muted">명언을 받아 오지 못했어요</p><div class="btns"><button type="button" class="main" data-act="requote">명언 다시 받기</button></div>`;
+    else if (q.state === 'failed') h = `<p class="muted">명언을 받아 오지 못했어요</p>${PHONE ? '' : '<div class="btns"><button type="button" class="main" data-act="requote">명언 다시 받기</button></div>'}`;
     else {
       h = `<blockquote>${esc(dash(q.text))}</blockquote><p class="who">- ${esc(q.author)}</p>`
         + (q.ko ? `<p class="ko">${esc(dash(q.ko))}</p>` : '') + (q.flag ? `<p class="flag">${esc(dash(q.flag))}</p>` : '');
       if (a) h += `<div class="who-card">${a.photo ? `<img src="/api/img?name=${encodeURIComponent(a.photo)}" alt="">` : ''}<div><b>${esc(a.name)}</b>
         ${a.src ? `<p>출처 · ${esc(dash(a.src))}</p>` : ''}${a.info.length ? `<ul>${a.info.map(x => `<li>${esc(dash(x))}</li>`).join('')}</ul>` : ''}</div></div>`;
       if (run) h += `<div class="job"><span class="spin"></span><b>번역하고 저자·출처를 정리하는 중</b> · ${J.elapsed || 0}초<ol>${(J.steps || []).slice(-3).map(s => `<li>${esc(dash(s))}</li>`).join('')}</ol></div>`;
+      else if (q.state === 'todo' && PHONE) h += '<p class="muted">맥에서 번역과 저자 정리를 하면 여기에 보여요</p>';
       else if (q.state === 'todo') h += (fail ? `<div class="job bad">정리하지 못했어요 · ${esc(dash(J.result).slice(-300))}</div>` : '')
         + `<div class="btns"><button type="button" class="main" data-act="quote">${fail ? '다시 정리하기' : '명언 정리하기'}</button></div>`;
       if (q.link) h += `<div class="btns"><button type="button" class="pill" data-open="04 Life/명언/저자/${esc(q.link)}">인물 노트 열기</button><button type="button" class="pill" data-open="04 Life/📜 명언 모음">명언 모음</button></div>`;
@@ -504,6 +602,7 @@ async function refreshQuote() {
 document.addEventListener('input', e => {
   const el = e.target;
   if (el.dataset.task) { const [k, i] = el.dataset.task.split(':'); T[k][+i].text = el.value; return saveTasks(k); }
+  if (el.classList.contains('oneline') && el.value.includes('\n')) el.value = el.value.replace(/\s*\n+\s*/g, ' ');
   if (el.tagName === 'TEXTAREA') grow(el);
   if (el.dataset.fm) setFm(el.dataset.fm, el.value);
   else if (el.dataset.sec) setSec(el.dataset.sec, el.value);
@@ -511,6 +610,7 @@ document.addEventListener('input', e => {
 document.addEventListener('keydown', e => {
   const el = e.target;
   if (el.dataset?.task) return taskKey(e, el);
+  if (e.key === 'Enter' && el.classList?.contains('oneline') && !e.isComposing) e.preventDefault();
   if (e.key === 'Escape' && !$('#calendar').hidden) return openCal(false);
   if (e.key === 'Escape' && !$('#settings').hidden) return openSettings(false);
   if (!e.metaKey || !D) return;
@@ -536,6 +636,13 @@ document.addEventListener('click', e => {
   else if (act === 'obs') { if (!D?.exists) return toast('아직 노트가 없어요. 쓰기 시작하면 만들어져요'); flush().then(() => api('/api/open', { rel: '04 Life/Planner/Daily/' + D.name })); }
   else if (act === 'gear') openSettings(true);
   else if (act === 'closeSet') openSettings(false);
+  else if (act === 'link') {
+    const c = $('#syncCode').value.trim().toUpperCase();
+    if (!c) return;
+    SY = { code: c, docs: {} }; keepSY(); drawSync();
+    syncPhone().then(() => { toast('맥과 이어졌어요'); drawSync(); load(want || today()); },
+      () => { toast(SY.err === 'code' ? '연결 코드가 맞지 않아요' : '맞추지 못했어요. 인터넷을 확인하세요'); drawSync(); });
+  }
   else if (act === 'theme') setTheme(THEMES[(THEMES.indexOf(theme) + 1) % THEMES.length]);
   else if (act === 'quote') api('/api/quote', { date: D.date }).then(watchJob).catch(err => toast(err.message));
   else if (act === 'requote') api('/api/quote', { date: D.date, again: true }).then(r => r.ok ? refreshQuote() : toast('이번에도 못 받았어요. 잠시 뒤에 다시 눌러 주세요')).catch(err => toast(err.message));
@@ -543,8 +650,16 @@ document.addEventListener('click', e => {
 
 /* ── 달력: 옵시디언 캘린더처럼 노트가 있는 날에 점 ── */
 let calYm = '', DAYS = new Set();
+// 시트가 열려 있으면 기록 한 칸을 잡아 둔다 → 갤럭시 뒤로 가기가 앱을 닫지 않고 시트를 닫는다
+function syncHistory() {
+  const open = !$('#calendar').hidden || !$('#settings').hidden, st = history.state && history.state.sheet;
+  if (open && !st) history.pushState({ sheet: 1 }, '');
+  else if (!open && st) history.back();
+}
+addEventListener('popstate', () => { $('#calendar').hidden = true; $('#settings').hidden = true; });
 async function openCal(on) {
   $('#calendar').hidden = !on;
+  syncHistory();
   if (!on || !D) return;
   calYm = D.date.slice(0, 7); drawCal();
   const r = await api('/api/days').catch(() => null);
@@ -625,15 +740,46 @@ function setColor(id) {
   $('#colorPick').innerHTML = COLORS.map(x => `<button type="button" data-pickcolor="${x.id}" class="${x.id === c.id ? 'on' : ''}" style="--sw:${x.dot}" aria-label="${x.name}"></button>`).join('');
   try { localStorage.setItem('color', c.id); } catch (e) {}
 }
-function openSettings(on) { $('#settings').hidden = !on; }
+function openSettings(on) { $('#settings').hidden = !on; syncHistory(); if (on) drawSync(); }
+async function drawSync() {
+  if (!PHONE) {
+    const s = await api('/api/sync').catch(() => null);
+    $('#syncInfo').textContent = !s?.code ? '맥 앱 폴더에 연결 코드가 없어요' : `폰 앱 설정에 이 코드를 넣으세요 · ${s.code}` + (s.err ? ` · 맞추지 못함 (${s.err})` : s.at ? ` · ${hm(s.at * 1000)} 맞춤` : '');
+    return;
+  }
+  $('#syncCode').value = SY.code || '';
+  $('#syncInfo').textContent = !SY.code ? '맥 앱 설정 > 폰 연동에 나온 연결 코드를 넣으면 맥의 데일리 노트와 이어져요'
+    : SY.err === 'code' ? '연결 코드가 맞지 않아요' : SY.err ? '맞추지 못했어요 · 인터넷을 확인하세요 (쓴 것은 폰에 남아 있어요)'
+    : `연결됨` + (SY.at ? ` · ${hm(SY.at)} 맞춤` : '') + (SY.macAt ? ` · 맥은 ${hm(SY.macAt)} 에 마지막으로 맞춤` : '');
+}
 
 setTheme(theme); setColor(color);
+$('#ver').textContent = 'v' + APP_VERSION;
 load(today());
+if (PHONE) {
+  const pull = () => syncPhone().then(phoneRefresh, () => { if (D && !pending() && !saving) state(syncText(D.date)); });
+  if (SY.code) pull();
+  setInterval(() => { if (!document.hidden && SY.code) pull(); }, 30000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && SY.code) pull(); });
+  // 새 버전 안내: version.json 과 다르면 버튼. 누르면 오프라인 보관본을 비우고 새로 받는다
+  let latest = '';
+  const check = () => fetch('./version.json?t=' + Date.now(), { cache: 'no-store' }).then(r => r.ok ? r.json() : null)
+    .then(j => { if (j && j.version && j.version !== APP_VERSION) { latest = j.version; $('#upd').hidden = false; } }).catch(() => {});
+  $('#upd').addEventListener('click', () => {
+    $('#upd').textContent = '새로 받는 중';
+    Promise.all([
+      window.caches ? caches.keys().then(ks => Promise.all(ks.filter(k => k !== 'fonts-v1').map(k => caches.delete(k)))) : null,
+      'serviceWorker' in navigator ? navigator.serviceWorker.getRegistration().then(r => r && r.update()) : null,
+    ].map(p => Promise.resolve(p).catch(() => {}))).then(() => location.replace('./?v=' + encodeURIComponent(latest || Date.now())));
+  });
+  addEventListener('load', () => { if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(() => {}); check(); });
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) check(); });
+}
 </script>
 <script type="module">
 // 글칸 편집기: 옵시디언 라이브 미리보기처럼 **굵게** 는 기호를 숨기고(커서가 그 안에 오면 보임), 줄 맨 앞 '- ' 는 점.
 // 글 자체는 마크다운 그대로라 노트에 저장되는 내용은 같다.
-import { EditorState, EditorView, keymap, placeholder, Decoration, ViewPlugin, WidgetType, history, historyKeymap, defaultKeymap } from '/cm.js';
+import { EditorState, EditorView, keymap, placeholder, Decoration, ViewPlugin, WidgetType, history, historyKeymap, defaultKeymap } from './cm.js';
 
 class Bullet extends WidgetType {
   toDOM() { const s = document.createElement('span'); s.className = 'cm-bul'; s.textContent = '•'; return s; }

@@ -65,4 +65,11 @@ assert cog['check'] == '인지재구성_체크' and cog['items'][0]['ask'][0]['t
 assert [i['toggle'] for i in cog['items'] if 'toggle' in i][:2] == ['인지왜곡_파국화', '인지왜곡_흑백사고']
 kind = next(m for m in mind if m.get('name') == '자기자비')
 assert [a['label'] for a in kind['items'][0]['ask']] == ['self-kindness', 'common humanity', 'mindfulness']
+# 폰에서 고친 칸 고르기: 맥이 안 고쳤으면 폰 것, 둘 다 고쳤으면 나중 것, 이상한 키는 버리되 받았다고는 알린다
+cur = {'fm': {'mood': 3, 'highlight': 'a'}, 'sec': {'journal': 'x', 'today': ''}}
+o = {'fm': {'mood': {'v': 4, 't': 1000, 'b': 3}, 'highlight': {'v': 'phone', 't': 1000, 'b': 'old'}, 'date': {'v': 'x', 't': 1, 'b': ''}},
+     'sec': {'journal': {'v': 'y', 't': 5000, 'b': 'z'}, 'today': {'v': '', 't': 9, 'b': None}, 'bogus': {'v': 'q', 't': 1, 'b': ''}}}
+fmc, secc, done = S.pick(cur, 3000, o)
+assert fmc == {'mood': 4} and secc == {'journal': 'y'} and len(done) == 6, (fmc, secc, done)
+assert S.sec_set(['### <font>Journal</font>', '- a', '', '#### #회고'], 'journal', '') == ['### <font>Journal</font>', '', '#### #회고']
 print('ok')
