@@ -5,7 +5,12 @@ import WebKit
 
 let PORT = 8749
 let HOME_URL = URL(string: "http://127.0.0.1:\(PORT)/")!
-let DIR = Bundle.main.bundleURL.deletingLastPathComponent()          // 앱이 들어 있는 프로젝트 폴더
+// 프로젝트 폴더: 앱 옆에 server.py 가 없으면(앱만 데스크톱·응용 프로그램으로 옮겨 둔 경우) ~/Desktop/app/daily-note
+let DIR: URL = {
+    let here = Bundle.main.bundleURL.deletingLastPathComponent()
+    return FileManager.default.fileExists(atPath: here.appendingPathComponent("server.py").path) ? here
+        : URL(fileURLWithPath: NSHomeDirectory() + "/Desktop/app/daily-note")
+}()
 let PYTHONS = ["/Library/Frameworks/Python.framework/Versions/3.14/bin/python3", "/usr/local/bin/python3", "/usr/bin/python3"]
 
 class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKUIDelegate {
@@ -70,6 +75,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKUIDe
             if up { self.web.load(URLRequest(url: HOME_URL)) }
             else if tries > 0 { DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { self.waitAndLoad(tries: tries - 1) } }
             else { self.web.loadHTMLString("<p style='font:16px -apple-system;padding:40px'>서버를 켜지 못했어요. /tmp/daily-note.log 를 확인해 주세요.</p>", baseURL: nil) }
+        }
+    }
+
+    // 서버가 꺼져 있어 화면을 못 불러오면(⌘R 포함) 서버를 다시 띄운다
+    func webView(_ w: WKWebView, didFailProvisionalNavigation n: WKNavigation!, withError e: Error) {
+        alive { up in
+            if !up { self.startServer() }
+            self.waitAndLoad(tries: 60)
         }
     }
 

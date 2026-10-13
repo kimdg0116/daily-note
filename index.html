@@ -117,9 +117,13 @@ button { font-family:inherit; cursor:pointer; }
 
 /* 맥 창에서는 글 쓰는 칸이 넓어야 해서 내용 폭 640 (폰 앱 기본은 400) */
 :root { --gut:max(16px, calc((100vw - 640px) / 2)); }
+/* SUIT 의 화살표(→ ↑)는 대가 없는 꺾쇠 모양이라 화살표만 시스템 글꼴로 */
+@font-face { font-family:"Arrows"; src:local("Apple SD Gothic Neo"), local("AppleSDGothicNeo-Regular"), local("Helvetica Neue"), local("HelveticaNeue"); unicode-range:U+2190-21FF, U+2794, U+27A1, U+2B05-2B07; }
+:root { --font-body:"Arrows", "SUIT Variable", "Apple SD Gothic Neo", sans-serif; }
 .top { gap:6px; background:var(--bar); -webkit-backdrop-filter:saturate(1.4) blur(14px); backdrop-filter:saturate(1.4) blur(14px); }
 .brand { flex:none; margin-right:auto; }
-.top input[type=date] { height:32px; padding:0 10px; font:inherit; font-family:var(--num); font-size:15px; font-weight:600; border:1px solid var(--line); border-radius:999px; background:var(--card); color:var(--fg); }
+.datebtn { display:flex; align-items:center; gap:7px; height:32px; padding:0 12px; font-family:var(--num); font-size:15px; font-weight:600; border:1px solid var(--line); border-radius:999px; background:var(--card); color:var(--fg); }
+.datebtn svg { width:16px; height:16px; color:var(--acc); }
 .pill { flex:none; height:32px; padding:0 13px; font-size:13px; font-weight:700; border:1px solid var(--line); border-radius:999px; background:var(--card); color:var(--acc); }
 
 .card { background:var(--card); border:1px solid var(--card-border); border-radius:16px; padding:16px; margin-bottom:12px; box-shadow:var(--shadow); }
@@ -132,6 +136,17 @@ textarea { min-height:46px; resize:none; overflow:hidden; }
 textarea.big { min-height:120px; }
 textarea:focus, .line:focus { border-color:var(--acc); background:var(--card); }
 ::placeholder { color:color-mix(in srgb, var(--mute) 60%, transparent); }
+/* 굵게·목록 점이 보이는 글칸: 글자는 투명한 입력칸, 뒤에 같은 자리로 꾸민 글을 깐다 */
+.rt { position:relative; border-radius:12px; background:var(--bg); }
+.rt:focus-within { background:var(--card); }
+.rt > textarea, .rt-bg { margin:0; letter-spacing:normal; word-spacing:normal; white-space:pre-wrap; overflow-wrap:break-word; word-break:normal; text-align:left; }
+.rt > textarea, .rt > textarea:focus { position:relative; z-index:1; background:transparent; color:transparent; caret-color:var(--fg); }
+.rt > textarea::selection { background:color-mix(in srgb, var(--acc) 28%, transparent); }
+.rt-bg { position:absolute; inset:0; overflow:hidden; padding:10px 12px; border:1px solid transparent; font-size:15px; line-height:1.6; tab-size:4; color:var(--fg); pointer-events:none; }
+.rt-bg b { font-weight:inherit; -webkit-text-stroke:.6px currentColor; }
+.rt-bg .mk { color:var(--mute); opacity:.4; }
+.rt-bg .bul { display:inline-block; position:relative; color:transparent; }
+.rt-bg .bul::after { content:'•'; position:absolute; inset:0; text-align:center; font-weight:800; color:var(--acc); transform:scale(1.35); }
 
 /* 날짜 */
 .hero { display:flex; align-items:flex-end; gap:14px; padding:16px; border-left:5px solid var(--deep); }
@@ -158,8 +173,10 @@ textarea:focus, .line:focus { border-color:var(--acc); background:var(--card); }
 .chips { display:flex; flex-wrap:wrap; gap:8px; }
 .chip { height:34px; padding:0 14px; font-size:14px; font-weight:700; border:1px solid var(--line); border-radius:999px; background:var(--card); color:var(--mute); }
 .chip.on { border-color:var(--acc); background:var(--acc); color:#fff; }
-.moods { display:grid; grid-template-columns:repeat(5, 1fr); gap:8px; }
-.moods button { height:44px; font-family:var(--num); font-size:20px; font-weight:600; border:1px solid var(--line); border-radius:12px; background:var(--bg); color:var(--mute); }
+.mood-row { display:flex; align-items:center; gap:12px; }
+.mood-row .lbl { margin:0; }
+.moods { display:flex; gap:6px; }
+.moods button { width:40px; height:32px; padding:0; font-family:var(--num); font-size:15px; font-weight:600; border:1px solid var(--line); border-radius:10px; background:var(--bg); color:var(--mute); }
 .moods button.on { border-color:var(--acc); background:var(--acc); color:#fff; }
 
 /* 마음 기록 */
@@ -176,7 +193,6 @@ textarea:focus, .line:focus { border-color:var(--acc); background:var(--card); }
 .opt { display:flex; align-items:center; gap:10px; width:100%; padding:6px 0; font-size:14px; border:0; background:none; color:var(--fg); text-align:left; }
 .opt .box { width:18px; height:18px; }
 .opt.on .box { border-color:var(--acc); background:var(--acc) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m5 12.5 4.5 4.5L19 7.5'/%3E%3C/svg%3E") center/12px no-repeat; }
-.sep { height:0; margin:6px 0; border:0; border-top:2px dashed var(--line); }
 
 /* 명언 */
 .quote blockquote { margin:4px 0 6px; font-size:18px; font-weight:700; line-height:1.5; letter-spacing:-.01em; color:var(--fg); }
@@ -211,6 +227,22 @@ textarea:focus, .line:focus { border-color:var(--acc); background:var(--card); }
 .swatches { display:flex; flex-wrap:wrap; gap:10px; }
 .swatches button { width:32px; height:32px; padding:0; border:3px solid var(--card); border-radius:50%; background:var(--sw); box-shadow:0 0 0 1px var(--line); }
 .swatches button.on { box-shadow:0 0 0 2px var(--fg); }
+/* 달력 */
+.panel .sheet.cal { max-width:480px; padding:20px; }
+.cal-head { display:flex; align-items:center; gap:8px; margin-bottom:14px; }
+.cal-head b { font-family:var(--num); font-size:26px; font-weight:600; color:var(--deep); }
+.cal-head .muted { margin-right:auto; font-size:13px; }
+.cal-grid { display:grid; grid-template-columns:repeat(7, 1fr); gap:4px; }
+.cal-grid .wd { padding:4px 0 6px; font-size:12px; font-weight:700; text-align:center; color:var(--mute); }
+.cal-grid button { position:relative; height:54px; padding:0 0 8px; font-family:var(--num); font-size:18px; font-weight:500; border:0; border-radius:12px; background:none; color:var(--fg); }
+.cal-grid button:hover { background:var(--soft); }
+.cal-grid .sun { color:var(--red); }
+.cal-grid .sat { color:var(--acc); }
+.cal-grid button.out { opacity:.35; }
+.cal-grid button.now { box-shadow:inset 0 0 0 2px var(--acc); }
+.cal-grid button.sel { background:var(--acc); color:#fff; }
+.cal-grid button.has::after { content:''; position:absolute; left:50%; bottom:9px; width:6px; height:6px; margin-left:-3px; border-radius:50%; background:var(--acc); }
+.cal-grid button.sel.has::after { background:#fff; }
 footer { margin-top:24px; }
 .ver { margin:0; text-align:right; font-family:Oswald, sans-serif; font-size:11px; letter-spacing:.06em; color:var(--mute); }
 #toast { position:fixed; left:var(--gut); right:var(--gut); bottom:calc(20px + env(safe-area-inset-bottom, 0px)); z-index:40; padding:13px; border-radius:12px; background:var(--toast); color:#fff; font-weight:600; text-align:center; opacity:0; transition:opacity .2s; pointer-events:none; }
@@ -221,7 +253,7 @@ footer { margin-top:24px; }
 <div class="top">
   <span class="brand">DAILY</span>
   <button type="button" class="icon-btn" id="prev" aria-label="전날"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 6-6 6 6 6"/></svg></button>
-  <input type="date" id="date" aria-label="날짜">
+  <button type="button" class="datebtn" id="cal" aria-label="달력 열기"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg><span id="dateText"></span></button>
   <button type="button" class="icon-btn" id="next" aria-label="다음 날"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button>
   <button type="button" class="pill" id="today">오늘</button>
   <button type="button" class="icon-btn" id="obs" aria-label="옵시디언에서 열기" title="옵시디언에서 열기"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg></button>
@@ -235,6 +267,7 @@ footer { margin-top:24px; }
   <div class="settings-row"><div><b>화면 모드</b><p id="themeMode"></p></div><button type="button" id="theme" class="icon-btn" aria-label="화면 모드 변경"></button></div>
   <div class="settings-row col"><div><b>테마 색</b><p id="colorName"></p></div><div class="swatches" id="colorPick"></div></div>
 </div></div>
+<div id="calendar" class="panel" role="dialog" aria-modal="true" aria-label="달력" hidden><div class="sheet cal" id="calBody"></div></div>
 <div id="toast" role="status" aria-live="polite"></div>
 
 <script>
@@ -256,13 +289,16 @@ function toast(m) { const t = $('#toast'); t.textContent = m; t.classList.add('s
 let D = null, T = {}, J = {}, dirty = { fm: {}, sec: {} }, timer = 0, saving = null, stateText = '';
 const pending = () => Object.keys(dirty.fm).length + Object.keys(dirty.sec).length > 0;
 
+let want = '';
 async function load(d) {
   await flush();
-  $('#date').value = d;
+  want = d;
+  const t = new Date(d + 'T12:00');
+  $('#dateText').textContent = `${t.getFullYear()}. ${t.getMonth() + 1}. ${t.getDate()}. (${WD[t.getDay()]})`;
   let n;
   try { n = await api('/api/day?date=' + d); }
   catch (e) { $('#view').innerHTML = `<div class="card"><p class="muted">노트를 열지 못했어요 · ${esc(e.message)}</p></div>`; return; }
-  if ($('#date').value !== d) return;                                  // 그새 다른 날짜를 눌렀다
+  if (want !== d) return;                                              // 그새 다른 날짜를 눌렀다
   D = n; T = { today: parseTasks(D.sec.today), tomorrow: parseTasks(D.sec.tomorrow) };
   stateText = D.exists ? '' : '새 노트';
   render();
@@ -282,7 +318,8 @@ async function flush() {
     if (r.created) { D.exists = true; draw('c-hero'); toast('옵시디언에 오늘 노트를 만들었어요'); refreshQuote(); }
   }).catch(e => {
     dirty = { fm: { ...body.fm, ...dirty.fm }, sec: { ...body.sec, ...dirty.sec } };
-    state('저장 못 함 · ' + e.message, true);
+    state('저장 못 함 · 다시 시도 중', true);
+    setTimeout(() => { if (pending()) flush(); }, 3000);
   }).finally(() => { saving = null; });
   await saving;
 }
@@ -338,10 +375,18 @@ function taskKey(e, el) {
   }
 }
 
-/* ── 공부·Journal: 옵시디언처럼 목록이 이어진다 (Enter 다음 줄 '- ', Tab 들여쓰기) ── */
+/* ── Journal·마음 기록: 옵시디언처럼 목록이 이어진다 (Enter 다음 줄 '- ', Tab 들여쓰기), ⌘B 굵게 ── */
 function mdKey(e, el) {
   if (e.isComposing || e.keyCode === 229) return;
   const v = el.value, s = el.selectionStart, ls = v.lastIndexOf('\n', s - 1) + 1, line = v.slice(ls, s);
+  if (e.metaKey && e.key === 'b') {
+    e.preventDefault();
+    const b = el.selectionEnd, sel = v.slice(s, b);
+    if (v.slice(s - 2, s) === '**' && v.slice(b, b + 2) === '**') {          // 이미 굵게면 풀기
+      el.setSelectionRange(s - 2, b + 2); document.execCommand('insertText', false, sel); el.setSelectionRange(s - 2, b - 2);
+    } else { document.execCommand('insertText', false, '**' + sel + '**'); el.setSelectionRange(s + 2, b + 2); }
+    return;
+  }
   if (e.key === 'Enter' && !e.shiftKey && s === el.selectionEnd) {
     const m = line.match(/^(\s*)- (\[[ xX]\] )?/);
     if (!m) return;
@@ -359,7 +404,15 @@ function grow(el) { el.style.height = 'auto'; el.style.height = el.scrollHeight 
 /* ── 화면 ── */
 const WD = ['일', '월', '화', '수', '목', '금', '토'];
 const has = v => v != null && v !== '' && v !== false;
-const ta = (attr, val, ph, cls = '') => `<textarea ${attr} rows="1" class="${cls}" placeholder="${esc(ph)}" spellcheck="false">${esc(val)}</textarea>`;
+const ta = (attr, val, ph, cls = '') => {
+  const t = `<textarea ${attr} rows="1" class="${cls}" placeholder="${esc(ph)}" spellcheck="false">${esc(val)}</textarea>`;
+  return cls.includes('md') ? `<div class="rt"><div class="rt-bg" aria-hidden="true">${hl(val)}</div>${t}</div>` : t;
+};
+// 꾸민 글: **굵게** 는 외곽선으로 굵게 (글자 폭이 그대로여야 커서가 맞는다), 줄 맨 앞 '- ' 는 점
+function hl(s) {
+  return esc(s).split('\n').map(l => l.replace(/^(\s*)([-*+])(?= )/, '$1<span class="bul">$2</span>')
+    .replace(/\*\*(?=\S)(.+?)(?<=\S)\*\*/g, '<span class="mk">**</span><b>$1</b><span class="mk">**</span>')).join('\n');
+}
 const CARDS = {
   'c-hero'() {
     const d = new Date(D.date + 'T12:00');
@@ -380,30 +433,34 @@ const CARDS = {
       ${show.Cycle ? `<span class="lbl">사이클 기록</span>${ta('data-fm="Cycle_log"', f.Cycle_log, '거리, 시간')}` : ''}</section>`;
   },
   'c-study'() {
-    if (D.sec.study == null) return '<span id="c-study" hidden></span>';
+    if (!D.sec.study?.trim()) return '<span id="c-study" hidden></span>';      // 템플릿에서 뺐다. 옛 노트에 쓴 게 있을 때만
     return `<section class="card" id="c-study"><h3>공부</h3>${ta('data-sec="study"', D.sec.study, '오늘 공부한 것', 'md')}</section>`;
   },
   'c-close'() {
-    return `<section class="card" id="c-close"><h3>하루 마무리</h3><span class="lbl" style="margin-top:0">기분 1-5</span>
-      <div class="moods">${[1, 2, 3, 4, 5].map(n => `<button type="button" data-mood="${n}" class="${D.fm.mood == n ? 'on' : ''}">${n}</button>`).join('')}</div>
+    return `<section class="card" id="c-close"><h3>하루 마무리</h3><div class="mood-row"><span class="lbl">기분</span>
+      <div class="moods">${[1, 2, 3, 4, 5].map(n => `<button type="button" data-mood="${n}" class="${D.fm.mood == n ? 'on' : ''}">${n}</button>`).join('')}</div></div>
       <span class="lbl">오늘의 한 줄</span><input class="line" data-fm="highlight" value="${esc(D.fm.highlight)}" placeholder="오늘을 한 줄로"></section>`;
   },
   'c-journal'() {
     if (D.sec.journal == null) return '<span id="c-journal" hidden></span>';
     return `<section class="card" id="c-journal"><h3>Journal</h3>${ta('data-sec="journal"', D.sec.journal, '- 오늘 있었던 일', 'md big')}</section>`;
   },
-  'c-mind'() {
+};
+// 마음 기록: 템플릿의 --- 로 나뉜 묶음마다 카드 하나
+const MIND_TITLE = ['하루 돌아보기', '마음 살피기'];
+const mindGroups = () => D.mind.reduce((g, m) => { if (m.sep) g.push([]); else g[g.length - 1].push(m); return g; }, [[]]).filter(g => g.length);
+function mindCard(gi) {
     const f = D.fm;
-    return `<section class="card" id="c-mind"><h3>마음 기록</h3>${D.mind.map(m => {
-      if (m.sep) return '<hr class="sep">';
+    return `<section class="card" id="c-mind${gi}"><h3>${MIND_TITLE[gi] || '마음 기록'}</h3>${(mindGroups()[gi] || []).map(m => {
       const open = f[m.check] === true || m.items.some(i => has(f[i.field]) || f[i.toggle] === true);
       const asks = a => a.map(x => `<p class="ask">${x.label ? `<em>${esc(x.label)}</em>` : ''}${esc(x.text)}</p>`).join('');
       return `<div class="mind"><button type="button" class="mhead${f[m.check] === true ? ' on' : ''}" data-tog="${esc(m.check)}">#${esc(m.name)}<span class="sw"></span></button>
         ${open ? `<div class="mbody">${m.items.map(i => i.toggle
           ? `<button type="button" class="opt${f[i.toggle] === true ? ' on' : ''}" data-tog="${esc(i.toggle)}"><span class="box"></span>${esc(i.label)}</button>`
-          : (i.ask ? asks(i.ask) : '') + (i.field ? ta(`data-fm="${esc(i.field)}"`, f[i.field], '') : '')).join('')}</div>` : ''}</div>`;
+          : (i.ask ? asks(i.ask) : '') + (i.field ? ta(`data-fm="${esc(i.field)}"`, f[i.field], '', 'md') : '')).join('')}</div>` : ''}</div>`;
     }).join('')}</section>`;
-  },
+}
+Object.assign(CARDS, {
   'c-quote'() {
     const q = D.quote, a = D.author, run = J.state === 'running' && J.date === D.date, fail = J.state === 'error' && J.date === D.date;
     let h = '';
@@ -423,11 +480,12 @@ const CARDS = {
     const chk = q.state === 'todo' || q.state === 'done' ? `<button type="button" class="mhead r${D.fm['quote_체크'] === true ? ' on' : ''}" style="width:auto;padding:0;font-size:13px;gap:8px;color:var(--mute)" data-tog="quote_체크">체크<span class="sw"></span></button>` : '';
     return `<section class="card quote" id="c-quote"><h3>오늘의 명언${chk}</h3>${h}</section>`;
   },
-};
-const ORDER = ['c-hero', 'c-tasks', 'c-work', 'c-study', 'c-close', 'c-journal', 'c-mind', 'c-quote'];
+});
+const cardHtml = id => id.startsWith('c-mind') ? mindCard(+id.slice(6)) : CARDS[id]();
 function render() {
   const y = scrollY;
-  $('#view').innerHTML = ORDER.map(id => CARDS[id]()).join('');
+  const ids = ['c-hero', 'c-tasks', 'c-work', 'c-study', 'c-close', 'c-journal', ...mindGroups().map((_, i) => 'c-mind' + i), 'c-quote'];
+  $('#view').innerHTML = ids.map(cardHtml).join('');
   document.querySelectorAll('#view textarea').forEach(grow);
   scrollTo(0, y);
 }
@@ -435,7 +493,7 @@ function draw(id) {
   const el = document.getElementById(id);
   if (!el) return;
   if (id === 'c-hero') document.getElementById('c-new')?.remove();
-  el.outerHTML = CARDS[id]();
+  el.outerHTML = cardHtml(id);
   document.querySelectorAll(`#${id} textarea`).forEach(grow);
 }
 
@@ -464,6 +522,7 @@ document.addEventListener('input', e => {
   const el = e.target;
   if (el.dataset.task) { const [k, i] = el.dataset.task.split(':'); T[k][+i].text = el.value; return saveTasks(k); }
   if (el.tagName === 'TEXTAREA') grow(el);
+  if (el.classList.contains('md')) el.previousElementSibling.innerHTML = hl(el.value);
   if (el.dataset.fm) setFm(el.dataset.fm, el.value);
   else if (el.dataset.sec) setSec(el.dataset.sec, el.value);
 });
@@ -471,6 +530,7 @@ document.addEventListener('keydown', e => {
   const el = e.target;
   if (el.dataset?.task) return taskKey(e, el);
   if (el.classList?.contains('md')) mdKey(e, el);
+  if (e.key === 'Escape' && !$('#calendar').hidden) return openCal(false);
   if (e.key === 'Escape' && !$('#settings').hidden) return openSettings(false);
   if (!e.metaKey || !D) return;
   if (e.key === '[') { e.preventDefault(); load(shift(D.date, -1)); }
@@ -491,6 +551,7 @@ document.addEventListener('click', e => {
   if (act === 'prev') load(shift(D.date, -1));
   else if (act === 'next') load(shift(D.date, 1));
   else if (act === 'today') load(today());
+  else if (act === 'cal') openCal(true);
   else if (act === 'obs') { if (!D?.exists) return toast('아직 노트가 없어요. 쓰기 시작하면 만들어져요'); flush().then(() => api('/api/open', { rel: '04 Life/Planner/Daily/' + D.name })); }
   else if (act === 'gear') openSettings(true);
   else if (act === 'closeSet') openSettings(false);
@@ -498,7 +559,39 @@ document.addEventListener('click', e => {
   else if (act === 'quote') api('/api/quote', { date: D.date }).then(watchJob).catch(err => toast(err.message));
   else if (act === 'requote') api('/api/quote', { date: D.date, again: true }).then(r => r.ok ? refreshQuote() : toast('이번에도 못 받았어요. 잠시 뒤에 다시 눌러 주세요')).catch(err => toast(err.message));
 });
-$('#date').addEventListener('change', e => { if (e.target.value) load(e.target.value); });
+
+/* ── 달력: 옵시디언 캘린더처럼 노트가 있는 날에 점 ── */
+let calYm = '', DAYS = new Set();
+async function openCal(on) {
+  $('#calendar').hidden = !on;
+  if (!on || !D) return;
+  calYm = D.date.slice(0, 7); drawCal();
+  const r = await api('/api/days').catch(() => null);
+  if (r) { DAYS = new Set(r.dates); drawCal(); }
+}
+function drawCal() {
+  const [y, m] = calYm.split('-').map(Number), lead = new Date(y, m - 1, 1).getDay(), rows = Math.ceil((lead + new Date(y, m, 0).getDate()) / 7);
+  let cells = WD.map((w, i) => `<span class="wd${i === 0 ? ' sun' : i === 6 ? ' sat' : ''}">${w}</span>`).join('');
+  for (let i = 0; i < rows * 7; i++) {
+    const d = new Date(y, m - 1, 1 - lead + i), s = ymd(d);
+    const cls = [d.getMonth() !== m - 1 && 'out', d.getDay() === 0 && 'sun', d.getDay() === 6 && 'sat', s === today() && 'now', s === D.date && 'sel', DAYS.has(s) && 'has'];
+    cells += `<button type="button" data-day="${s}" class="${cls.filter(Boolean).join(' ')}">${d.getDate()}</button>`;
+  }
+  const n = [...DAYS].filter(d => d.startsWith(calYm)).length;
+  $('#calBody').innerHTML = `<div class="cal-head"><b>${y}. ${String(m).padStart(2, '0')}</b><span class="muted">노트 ${n}개</span>
+    <button type="button" class="icon-btn" data-calm="-1" aria-label="전달"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 6-6 6 6 6"/></svg></button>
+    <button type="button" class="pill" data-calm="0">이번 달</button>
+    <button type="button" class="icon-btn" data-calm="1" aria-label="다음 달"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button></div>
+    <div class="cal-grid">${cells}</div>`;
+}
+$('#calendar').addEventListener('click', e => {
+  if (e.target.id === 'calendar') return openCal(false);
+  const b = e.target.closest('button');
+  if (!b) return;
+  e.stopPropagation();
+  if (b.dataset.day) { openCal(false); load(b.dataset.day); }
+  else if (b.dataset.calm) { const [y, m] = calYm.split('-').map(Number), n = +b.dataset.calm; calYm = n ? ymd(new Date(y, m - 1 + n, 1)).slice(0, 7) : today().slice(0, 7); drawCal(); }
+});
 $('#settings').addEventListener('click', e => { if (e.target.id === 'settings') openSettings(false); });
 // 옵시디언에서 고치고 돌아오면 새로 읽는다 (쓰는 중이 아닐 때만)
 addEventListener('focus', async () => {

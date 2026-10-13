@@ -26,14 +26,17 @@ assert 'Crossfit_WOD: |-' in fm
 
 # 본문 칸: 쓰고 다시 읽으면 같다
 lines = body.split('\n')
-for k, v in {'tomorrow': '- [ ] 내일', 'today': '- [x] 오늘 ✅ 2026-10-14\n\t- [ ] 하위', 'study': '줄1\n\n줄3',
+assert S.sec_get(lines, 'study') is None and S.sec_set(lines, 'study', 'x') == lines      # 템플릿에서 공부 칸을 뺐다 (2026-10-14)
+for k, v in {'tomorrow': '- [ ] 내일', 'today': '- [x] 오늘 ✅ 2026-10-14\n\t- [ ] 하위',
              'journal': '- 일기\n---\n### 어제 있었던 일\n- 더'}.items():
     lines = S.sec_set(lines, k, v)
     assert S.sec_get(lines, k) == v, k
 lines = S.sec_set(lines, 'today', '')
 out = '\n'.join(lines)
 assert S.sec_get(lines, 'today') == '' and "### Today's Tasks\n없습니다😀\n\n> [!done]- Crossfit" in out
-assert "### Tomorrow's Tasks\n- [ ] 내일\n\n### Today's Tasks" in out and '> [!note]+ 공부\n> 줄1\n>\n> 줄3\n\n> [!abstract]' in out
+assert "### Tomorrow's Tasks\n- [ ] 내일\n\n### Today's Tasks" in out
+old = S.sec_set(['> [!note]+ 공부', '> ', '', '> [!abstract]- x'], 'study', '줄1\n\n줄3')      # 공부 칸이 있는 옛 노트
+assert old == ['> [!note]+ 공부', '> 줄1', '>', '> 줄3', '', '> [!abstract]- x'] and S.sec_get(old, 'study') == '줄1\n\n줄3'
 assert S.quote_get(lines) == {'text': 'Be kind.', 'author': 'Someone', 'ko': '', 'flag': '', 'link': '', 'state': 'todo'}
 
 # /명언 이 정리한 뒤의 모양

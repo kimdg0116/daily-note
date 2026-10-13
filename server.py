@@ -427,6 +427,9 @@ class H(BaseHTTPRequestHandler):
             if n['date'] == n['today'] and n['quote']['state'] == 'todo' and n['date'] not in TRIED:
                 start_quote(n['date'])        # 오늘 명언은 알아서 /명언
             return self.send(200, n)
+        if u.path == '/api/days':            # 달력 점: 노트가 있는 날
+            names = os.listdir(DAILY) if os.path.isdir(DAILY) else []
+            return self.send(200, {'dates': sorted(n[:10] for n in names if DATE.match(n[:10]) and n.endswith('.md'))})
         if u.path == '/api/job':
             j = dict(JOB)
             if j.get('started'):
