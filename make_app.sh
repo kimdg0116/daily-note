@@ -27,14 +27,30 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 PLIST
 # 아이콘
 python3 - <<'PY'
-from PIL import Image, ImageDraw, ImageFont
-F = '/System/Library/Fonts/Avenir Next Condensed.ttc'
+from PIL import Image, ImageDraw
 n = 1024
-im = Image.new('RGBA', (n, n), (0, 0, 0, 0)); d = ImageDraw.Draw(im)
-d.rounded_rectangle((90, 90, n - 90, n - 90), radius=190, fill='white')
-d.text((n/2, n*0.36), 'DAILY', font=ImageFont.truetype(F, 210, index=0), fill='#2e70ff', anchor='mm')
-d.text((n/2, n*0.56), 'NOTE', font=ImageFont.truetype(F, 150, index=0), fill='#1428a0', anchor='mm')
-d.rounded_rectangle((n*0.32, n*0.70, n*0.68, n*0.72), radius=8, fill='#2e70ff')
+# 주황 그라데이션 바탕 (토플 앱들의 흰 바탕·파란 글자와 겹치지 않게)
+bg = Image.new('RGBA', (n, n))
+for y in range(n):
+    t = y / n
+    c = tuple(int(a + (b - a) * t) for a, b in zip((255, 176, 64), (255, 94, 58)))
+    ImageDraw.Draw(bg).line((0, y, n, y), fill=c + (255,))
+mask = Image.new('L', (n, n), 0)
+ImageDraw.Draw(mask).rounded_rectangle((90, 90, n - 90, n - 90), radius=190, fill=255)
+im = Image.new('RGBA', (n, n), (0, 0, 0, 0)); im.paste(bg, (0, 0), mask)
+d = ImageDraw.Draw(im)
+# 노트 한 장: 그림자 + 흰 종이
+d.rounded_rectangle((270, 250, 774, 820), radius=48, fill=(180, 60, 20, 90))
+d.rounded_rectangle((250, 230, 754, 800), radius=48, fill='white')
+# 스프링 고리
+for x in (370, 502, 634):
+    d.rounded_rectangle((x - 22, 180, x + 22, 290), radius=22, fill='#5a2a14')
+# 체크 상자 3줄 (위 둘은 체크, 마지막은 빈 칸)
+for i, y in enumerate((380, 510, 640)):
+    d.rounded_rectangle((320, y - 34, 388, y + 34), radius=14, outline='#ff6a3a', width=10)
+    if i < 2:
+        d.line((334, y, 352, y + 20, 378, y - 22), fill='#ff6a3a', width=14, joint='curve')
+    d.rounded_rectangle((430, y - 10, 690 - i * 70, y + 10), radius=10, fill='#e6e2dd')
 im.save('/tmp/daily-note-icon.png')
 PY
 rm -rf /tmp/dn.iconset && mkdir /tmp/dn.iconset
