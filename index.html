@@ -237,6 +237,11 @@ textarea:focus, .line:focus { border-color:var(--acc); background:var(--card); }
 .settings-row p { margin:3px 0 0; font-size:13px; color:var(--mute); }
 .settings-row .icon-btn { width:44px; height:40px; font-size:19px; }
 .settings-row.col { flex-direction:column; align-items:stretch; }
+.wbox summary { list-style:none; cursor:pointer; } .wbox summary::-webkit-details-marker { display:none; }
+.wbox ol { margin:10px 0 0; padding-left:20px; font-size:14px; line-height:1.6; } .wbox li { margin:4px 0; } .wbox li b { display:inline; font-size:inherit; }
+.wbox pre { margin:10px 0; padding:10px; max-height:120px; overflow:auto; font-size:11px; line-height:1.45; border:1px solid var(--line); border-radius:10px; background:var(--bg); white-space:pre-wrap; word-break:break-all; user-select:text; -webkit-user-select:text; }
+.wbox code { padding:1px 5px; border-radius:6px; background:var(--soft); font-size:13px; }
+html.android .wbox { display:none !important; }
 .swatches { display:flex; flex-wrap:wrap; gap:10px; }
 .swatches button { width:32px; height:32px; padding:0; border:3px solid var(--card); border-radius:50%; background:var(--sw); box-shadow:0 0 0 1px var(--line); }
 .swatches button.on { box-shadow:0 0 0 2px var(--fg); }
@@ -309,6 +314,19 @@ footer { margin-top:24px; }
     <div class="sync-in phone-only"><input id="syncCode" class="line" placeholder="연결 코드" autocomplete="off" autocapitalize="characters" spellcheck="false"><button type="button" class="pill" data-act="link">연결</button></div></div>
   <div class="settings-row col phone-only"><div><b>옵시디언 볼트 이름</b><p>'옵시디언에서 열기'가 폰의 이 볼트를 열어요</p></div>
     <div class="sync-in"><input id="vaultName" class="line plain" placeholder="obsidian phone" autocomplete="off" autocapitalize="off" spellcheck="false"></div></div>
+  <details class="settings-row col phone-only wbox"><summary><b>홈 화면 위젯</b><p>오늘·내일 할 일을 아이폰 홈 화면에 · 눌러서 설치 방법</p></summary>
+    <ol>
+      <li>App Store 에서 <b>Scriptable</b> 설치</li>
+      <li>아래 <b>설치 코드 복사</b> → Scriptable 오른쪽 위 <b>+</b> → 붙여넣기 → 맨 위 제목을 <code>데일리 위젯</code> 으로 바꾸고 <b>Done</b></li>
+      <li>목록의 <b>데일리 위젯</b>을 눌러 실행 → <b>연결 코드</b>(위 폰 연동과 같은 코드) 입력 → 미리보기로 확인</li>
+      <li>홈 화면 빈 곳을 길게 누름 → <b>편집</b> → <b>위젯 추가</b> → <b>Scriptable</b> → 소형·중형·대형 중 골라 추가</li>
+      <li>추가한 위젯을 길게 눌러 <b>위젯 편집</b> → Script: <code>데일리 위젯</code></li>
+      <li><b>위젯 색 맞추기</b>를 누르면 위젯이 지금 테마 색으로 바뀝니다 (테마 색을 바꿀 때마다 한 번)</li>
+    </ol>
+    <pre id="wCode"></pre>
+    <div class="sync-in"><button type="button" class="pill" data-act="wcopy">설치 코드 복사</button><button type="button" class="pill" data-act="wcolor">위젯 색 맞추기</button></div>
+    <p>소형 = 오늘 · 중형 = 오늘 | 내일 · 대형 = 오늘 + 내일. 앱에서 체크하면 위젯은 iOS 가 다시 그릴 때(보통 몇 분~15분 안) 바뀝니다. 위젯을 누르면 iOS 가 사파리로 여니, 앱은 홈 화면 아이콘으로 여세요. Scriptable 목록의 <code>daily-note-widget-core</code> 는 위젯 본체라 지우지 마세요.</p>
+  </details>
 </div></div>
 <div id="qpanel" class="panel" role="dialog" aria-modal="true" aria-label="명언 모음" hidden><div class="sheet qs" id="qBody"></div></div>
 <div id="calendar" class="panel" role="dialog" aria-modal="true" aria-label="달력" hidden><div class="sheet cal" id="calBody"></div></div>
@@ -340,7 +358,7 @@ function api(u, body) {
 /* ── 폰: 맥 서버 대신 동기화 서버(Apps Script, sync/Code.js)를 우체통으로 쓴다.
    우체통은 오가는 것만 잠깐 들고, 노트 사본은 폰 안(IndexedDB)에 전부 둔다. 처음 연결하면 맥이 모든 노트를 나눠 보내고,
    그 뒤로는 바뀐 노트만 온다. 고친 칸은 보내 두면 맥이 볼트에 쓴다 ── */
-const APP_VERSION = '26.10.14-5';                                     // 올릴 때마다 version.json · sw.js 와 같이 올린다
+const APP_VERSION = '26.10.15-1';                                     // 올릴 때마다 version.json · sw.js 와 같이 올린다
 const LOCAL = /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
 const PHONE = location.protocol === 'https:' || (LOCAL && location.search.includes('phone'));   // ?phone = 맥에서 폰 화면 시험
 // 맥에서 폰 화면을 시험할 때는 늘 가짜 연동 서버(node sync/test_sync.mjs --serve)로만 — 진짜 노트에 시험 글이 섞이지 않게
@@ -721,6 +739,8 @@ document.addEventListener('click', e => {
     syncPhone().then(() => { toast('맥과 이어졌어요'); drawSync(); load(want || today()); },
       () => { toast(SY.err === 'code' ? '연결 코드가 맞지 않아요' : '맞추지 못했어요. 인터넷을 확인하세요'); drawSync(); });
   }
+  else if (act === 'wcopy') navigator.clipboard.writeText(WIDGET_LOADER).then(() => toast('복사했어요. Scriptable 에 붙여넣으세요'), () => toast('위 코드를 길게 눌러 전체 선택 → 복사하세요'));
+  else if (act === 'wcolor') location.href = 'scriptable:///run/daily-note-widget-core?color=' + color;
   else if (act === 'theme') setTheme(THEMES[(THEMES.indexOf(theme) + 1) % THEMES.length]);
   else if (act === 'quote') api('/api/quote', { date: D.date }).then(watchJob).catch(err => toast(err.message));
   else if (act === 'requote') api('/api/quote', { date: D.date, again: true }).then(r => r.ok ? refreshQuote() : toast('이번에도 못 받았어요. 잠시 뒤에 다시 눌러 주세요')).catch(err => toast(err.message));
@@ -851,6 +871,21 @@ function setColor(id) {
   try { localStorage.setItem('color', c.id); } catch (e) {}
 }
 function openSettings(on) { $('#settings').hidden = !on; syncHistory(); if (on) drawSync(); }
+// 아이폰 위젯 설치 코드: Scriptable 에 한 번 붙여넣으면 위젯 본체(widget.js)를 매번 받아 실행한다 → 본체를 고치면 위젯이 바로 최신
+const WIDGET_LOADER = `// 데일리 노트 위젯 설치 코드 - Scriptable 에 한 번만 붙여넣으면 됩니다
+// 실제 위젯은 아래 주소에서 받아 오고, 고쳐지면 자동으로 최신이 됩니다
+const SRC = 'https://kimdg0116.github.io/daily-note/widget.js';
+const fm = FileManager.iCloud().isFileStoredIniCloud(module.filename) ? FileManager.iCloud() : FileManager.local();
+const file = fm.joinPath(fm.documentsDirectory(), 'daily-note-widget-core.js');
+try {
+  const r = new Request(SRC + '?t=' + Date.now()); r.timeoutInterval = 10;
+  const code = await r.loadString();
+  if (code.includes('DAILY_NOTE_WIDGET')) fm.writeString(file, code);
+} catch (e) {}
+if (fm.isFileStoredIniCloud(file)) await fm.downloadFileFromiCloud(file);
+await importModule('daily-note-widget-core')();
+`;
+$('#wCode').textContent = WIDGET_LOADER;
 async function drawSync() {
   if (!PHONE) {
     const s = await api('/api/sync').catch(() => null);

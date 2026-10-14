@@ -69,6 +69,15 @@ assert.equal(call({ op: 'get', since: rev2 }).docs[C].fm.mood, 4);
 call({ op: 'edit', date: C, fm: { mood: { v: 5, b: 4 } }, t: 2000 });
 assert.deepEqual(call({ op: 'mac', done: [[C, 'fm', 'mood', 1000]] }).ob[C].fm.mood, { v: 5, t: 2000, b: 3 });
 assert.deepEqual(call({ op: 'mac', done: [[C, 'fm', 'mood', 2000]], put: { [C]: doc(C, 5) } }).ob, {});
+// 위젯: 할 일 칸만, 폰 수정을 얹고, 아무것도 안 바꾼다
+const tdoc = (d, today, tomorrow) => ({ ...doc(d, 1), sec: { today, tomorrow, journal: 'x' } });
+call({ op: 'mac', put: { [B]: tdoc(B, '- [ ] a', '- [ ] b') } });
+call({ op: 'edit', date: C, sec: { tomorrow: { v: '- [ ] c', b: '' } }, t: 3000 });
+const before = JSON.stringify(store);
+assert.deepEqual(call({ op: 'widget', today: C, yday: B }), { today: { today: '', tomorrow: '- [ ] c' }, yday: { today: '- [ ] a', tomorrow: '- [ ] b' } });
+assert.deepEqual(call({ op: 'widget', today: '2030-01-01', yday: 'bad' }), { today: null, yday: null });
+assert.equal(JSON.stringify(store), before);
+call({ op: 'mac', done: [[C, 'sec', 'tomorrow', 3000]] });
 // 상자가 넘치면 오래된 것부터 버리고, 그보다 오래 안 들른 폰은 처음부터 다시 받는다
 const stale = call({ op: 'get', since: 0 }).rev;
 for (let i = 0; i < 6; i++) call({ op: 'mac', put: { [`2026-09-0${i + 1}`]: doc(`2026-09-0${i + 1}`, 1, randomBytes(60000).toString('base64')) } });

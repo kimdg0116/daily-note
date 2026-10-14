@@ -13,6 +13,7 @@
  *
  * 폰 → {code, op:'get', since, meta?}              → {rev, docs:{날짜:노트}, stale?, want?, dates?, mind?, quotes?, wait:{날짜:칸 수}, macAt}
  * 폰 → {code, op:'want'}                    → {ok}       모든 노트 다시 받기 (처음 연결할 때)
+ * 위젯 → {code, op:'widget', today, yday}   → {today:{today?, tomorrow?}|null, yday:…}   할 일 칸만, 읽기만
  * 폰 → {code, op:'edit', date, fm, sec, t}  → {ok}       fm/sec = {키: {v: 새 값, b: 폰이 본 값}}
  * 맥 → {code, op:'mac', put, keep?, done, resync?, dates?, mind?, quotes?} → {ob, want}      quotes = 명언 모음 {list, favs}
  *        resync = {to: 이번 묶음 마지막 날짜, done: 끝인지}, done = [[날짜, 'fm'|'sec', 키, t]]
@@ -59,6 +60,19 @@ const OPS = {
       else { setJ_('want', want); r.want = true; }
     }
     return r;
+  },
+
+  // 아이폰 위젯: 오늘·어제 노트의 할 일 칸만. 읽기만 한다 (get 은 want.seen 을 바꾸므로 위젯이 쓰면 안 된다)
+  // 아직 맥이 볼트에 안 쓴 폰 수정(ob)을 얹어서 → 폰 앱에서 체크하면 맥이 꺼져 있어도 위젯에 보인다. 노트도 수정도 없으면 null
+  widget(q) {
+    const ob = getJ_('ob') || {}, bi = getJ_('bi') || {};
+    const tasks = d => {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(d || '')) return null;
+      const s = bi[d] && (getJ_('b:' + d) || {}).sec, o = (ob[d] && ob[d].sec) || {}, r = {};
+      for (const k of ['today', 'tomorrow']) if (k in o) r[k] = o[k].v; else if (s && k in s) r[k] = s[k];
+      return Object.keys(r).length ? r : null;
+    };
+    return { today: tasks(q.today), yday: tasks(q.yday) };
   },
 
   want() {

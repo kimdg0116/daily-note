@@ -1,5 +1,5 @@
 /* 데일리 노트 폰 앱 - 오프라인 보관 (인터넷이 없어도 열리고, 쓴 것은 폰에 남았다가 나중에 보낸다). 글꼴은 fonts-v1 에 따로 오래 보관 */
-var VERSION = "26.10.14-5";
+var VERSION = "26.10.15-1";
 var CACHE = "daily-note-v" + VERSION;
 var CORE = ["./", "./index.html", "./cm.js", "./manifest.webmanifest",
             "./apple-touch-icon.png", "./icon-192.png", "./icon-512.png"];

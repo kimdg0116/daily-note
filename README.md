@@ -25,5 +25,12 @@
 - 연동 서버 반영: `cd sync && ~/Desktop/app/dosimetrist-calendar-server/tools/node_modules/.bin/clasp push -f && …/clasp redeploy AKfycbwAzbhrtPtjrd8KVQuFTFXfgLmzY4Cgsk-DZlF2ur3b6a7hU_LMQOaKddSt-0O9mOIP -d "설명"`
 - 맥에서 폰 화면 시험: `node sync/test_sync.mjs --serve`(가짜 우체통 8751) + `http://127.0.0.1:8749/?phone`. localhost 의 폰 모드는 늘 가짜 우체통으로만 간다 (진짜 노트에 시험 글이 섞이지 않게).
 
+## 아이폰 위젯 (오늘·내일 할 일)
+- `widget.js` = Scriptable 위젯 본체 (Pages 에 올라감). 폰에는 앱 설정 > 홈 화면 위젯의 짧은 설치 코드만 붙여넣고, 그 코드가 매번 본체를 받아 실행한다 → 본체를 고쳐 push 하면 위젯이 바뀐다.
+- 소형 = 오늘 · 중형 = 오늘 | 내일 · 대형 = 오늘 + 내일. 보기만 (체크는 앱에서). 오늘 노트가 아직 없으면 어제 노트의 내일 할 일.
+- 데이터는 우체통 `op:'widget'` (읽기만, 폰 수정 ob 를 얹음 → 맥이 꺼져 있어도 폰 앱에서 체크한 게 보인다). 다시 그리는 때는 iOS 가 정한다.
+- 색은 도시메트리 캘린더 widget.js 와 같은 16색(PALETTES). 앱 '위젯 색 맞추기' → `scriptable:///run/daily-note-widget-core?color=<id>`.
+- 미리보기: Scriptable 흉내 페이지에 widget.js 를 그대로 넣어 돌려 본다 (실기기 확인은 폰에서).
+
 확인: `python3 test_note.py` (템플릿 렌더·칸 읽고 쓰기·명언 칸·마음 기록 양식·폰 수정 고르기), `node sync/test_sync.mjs` (우체통)
 시험: `VAULT=<사본 볼트> CLAUDE=<가짜 claude> [SYNC_URL=http://127.0.0.1:8751] python3 server.py` 로 실제 볼트를 건드리지 않고 돌려 볼 수 있다.
