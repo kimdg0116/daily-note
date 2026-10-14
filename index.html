@@ -209,7 +209,9 @@ textarea:focus, .line:focus { border-color:var(--acc); background:var(--card); }
 .quote blockquote { margin:4px 0 6px; font-size:18px; font-weight:700; line-height:1.5; letter-spacing:-.01em; color:var(--fg); }
 .quote .who { margin:0 0 10px; font-size:14px; font-weight:600; color:var(--mute); }
 .quote .ko { margin:0 0 10px; padding:10px 14px; font-size:15px; border-radius:12px; background:var(--soft); color:var(--deep); }
-.quote .flag { margin:0 0 10px; font-size:13px; color:var(--orange-ink); }
+.quote .flag { display:flex; gap:6px; margin:0 0 10px; font-size:13px; color:var(--orange-ink); }
+.quote .flag svg { flex:none; width:15px; height:15px; margin-top:2px; }
+.settings-row .icon-btn svg { width:21px; height:21px; }
 .who-card { display:flex; gap:14px; margin-top:12px; padding-top:14px; border-top:1px solid var(--line); }
 .who-card img { flex:none; width:84px; height:104px; object-fit:cover; border-radius:10px; background:var(--soft); }
 .who-card b { display:block; font-size:15px; }
@@ -296,6 +298,15 @@ footer { margin-top:24px; }
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const dash = s => String(s ?? '').replace(/[—–−]/g, '-');          // 앱 화면은 짧은 하이픈만
+// 아이콘: 앱 화면에는 이모지 대신 SVG (해·달 같은 기호 글자도 폰에서는 이모지로 그려진다)
+const svg = d => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+const ICON = {
+  system: svg('<circle cx="12" cy="12" r="8.5"/><path d="M12 3.5a8.5 8.5 0 0 1 0 17z" fill="currentColor" stroke="none"/>'),
+  light: svg('<circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M4.6 4.6 6 6M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4 6 18M18 6l1.4-1.4"/>'),
+  dark: svg('<path d="M20 14.6A8.5 8.5 0 0 1 9.4 4 7.5 7.5 0 1 0 20 14.6z"/>'),
+  warn: svg('<path d="M12 3.8 2.6 20h18.8z"/><path d="M12 10v4.4M12 17.3v.01"/>'),
+  info: svg('<circle cx="12" cy="12" r="9"/><path d="M12 11v5.5M12 7.6v.01"/>'),
+};
 const ymd = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 const today = () => ymd(new Date());
 const shift = (s, n) => { const d = new Date(s + 'T12:00'); d.setDate(d.getDate() + n); return ymd(d); };
@@ -307,7 +318,7 @@ function api(u, body) {
 /* ── 폰: 맥 서버 대신 동기화 서버(Apps Script, sync/Code.js)를 우체통으로 쓴다.
    우체통은 오가는 것만 잠깐 들고, 노트 사본은 폰 안(IndexedDB)에 전부 둔다. 처음 연결하면 맥이 모든 노트를 나눠 보내고,
    그 뒤로는 바뀐 노트만 온다. 고친 칸은 보내 두면 맥이 볼트에 쓴다 ── */
-const APP_VERSION = '26.10.14-2';                                     // 올릴 때마다 version.json · sw.js 와 같이 올린다
+const APP_VERSION = '26.10.14-3';                                     // 올릴 때마다 version.json · sw.js 와 같이 올린다
 const LOCAL = /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
 const PHONE = location.protocol === 'https:' || (LOCAL && location.search.includes('phone'));   // ?phone = 맥에서 폰 화면 시험
 // 맥에서 폰 화면을 시험할 때는 늘 가짜 연동 서버(node sync/test_sync.mjs --serve)로만 — 진짜 노트에 시험 글이 섞이지 않게
@@ -577,7 +588,7 @@ Object.assign(CARDS, {
     else if (q.state === 'failed') h = `<p class="muted">명언을 받아 오지 못했어요</p>${PHONE ? '' : '<div class="btns"><button type="button" class="main" data-act="requote">명언 다시 받기</button></div>'}`;
     else {
       h = `<blockquote>${esc(dash(q.text))}</blockquote><p class="who">- ${esc(q.author)}</p>`
-        + (q.ko ? `<p class="ko">${esc(dash(q.ko))}</p>` : '') + (q.flag ? `<p class="flag">${esc(dash(q.flag))}</p>` : '');
+        + (q.ko ? `<p class="ko">${esc(dash(q.ko))}</p>` : '') + (q.flag ? `<p class="flag">${ICON[q.flag.startsWith('ℹ') ? 'info' : 'warn']}<span>${esc(dash(q.flag.replace(/^[⚠ℹ]\uFE0F?\s*/, '')))}</span></p>` : '');
       if (a) h += `<div class="who-card">${a.photo ? `<img src="/api/img?name=${encodeURIComponent(a.photo)}" alt="">` : ''}<div><b>${esc(a.name)}</b>
         ${a.src ? `<p>출처 · ${esc(dash(a.src))}</p>` : ''}${a.info.length ? `<ul>${a.info.map(x => `<li>${esc(dash(x))}</li>`).join('')}</ul>` : ''}</div></div>`;
       if (run) h += `<div class="job"><span class="spin"></span><b>번역하고 저자·출처를 정리하는 중</b> · ${J.elapsed || 0}초<ol>${(J.steps || []).slice(-3).map(s => `<li>${esc(dash(s))}</li>`).join('')}</ol></div>`;
@@ -733,13 +744,13 @@ addEventListener('pagehide', flush);
 document.addEventListener('visibilitychange', () => { if (document.hidden) flush(); });
 
 /* ── 설정 시트 ── */
-const THEMES = ['system', 'light', 'dark'], THEME_ICON = { system: '◐', light: '☀', dark: '☾' };
+const THEMES = ['system', 'light', 'dark'];
 let theme = 'system';
 try { theme = THEMES.includes(localStorage.getItem('theme')) ? localStorage.getItem('theme') : 'system'; } catch (e) {}
 function setTheme(t) {
   theme = t;
   if (t === 'system') document.documentElement.removeAttribute('data-theme'); else document.documentElement.setAttribute('data-theme', t);
-  $('#theme').textContent = THEME_ICON[t];
+  $('#theme').innerHTML = ICON[t];
   $('#themeMode').textContent = { system: '기기 설정에 맞춤', light: '밝게', dark: '어둡게' }[t];
   try { localStorage.setItem('theme', t); } catch (e) {}
 }
