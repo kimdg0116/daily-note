@@ -11,7 +11,7 @@
  * 저장은 Script Properties (gzip + base64, 8000자 조각) 뿐이라 따로 권한이 필요 없다.
  * 연결 코드는 Secret.js 의 CODE (git 제외, clasp 로만 올라감).
  *
- * 폰 → {code, op:'get', since}              → {rev, docs:{날짜:노트}, stale?, want?, dates?, mind?, quotes?, wait:{날짜:칸 수}, macAt}
+ * 폰 → {code, op:'get', since, meta?}              → {rev, docs:{날짜:노트}, stale?, want?, dates?, mind?, quotes?, wait:{날짜:칸 수}, macAt}
  * 폰 → {code, op:'want'}                    → {ok}       모든 노트 다시 받기 (처음 연결할 때)
  * 폰 → {code, op:'edit', date, fm, sec, t}  → {ok}       fm/sec = {키: {v: 새 값, b: 폰이 본 값}}
  * 맥 → {code, op:'mac', put, keep?, done, resync?, dates?, mind?, quotes?} → {ob, want}      quotes = 명언 모음 {list, favs}
@@ -51,7 +51,7 @@ const OPS = {
     if (since && (meta.floor || 0) > since) r.stale = true;   // 그사이 상자에서 버린 노트가 있다 → 처음부터 다시
     for (const d in bi) if (bi[d][0] > since) r.docs[d] = getJ_('b:' + d);
     for (const d in ob) r.wait[d] = pending_(ob[d]);
-    if ((meta.mrev || 0) > since) { r.dates = meta.dates || []; r.mind = meta.mind || []; r.quotes = meta.quotes || null; }
+    if ((meta.mrev || 0) > since || q.meta) { r.dates = meta.dates || []; r.mind = meta.mind || []; r.quotes = meta.quotes || null; }   // meta = 놓친 폰이 다시 달라고
     const want = getJ_('want');
     if (want) {
       want.seen = rev;                                        // 폰이 지금까지 넣은 걸 다 받았다

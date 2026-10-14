@@ -340,7 +340,7 @@ function api(u, body) {
 /* ── 폰: 맥 서버 대신 동기화 서버(Apps Script, sync/Code.js)를 우체통으로 쓴다.
    우체통은 오가는 것만 잠깐 들고, 노트 사본은 폰 안(IndexedDB)에 전부 둔다. 처음 연결하면 맥이 모든 노트를 나눠 보내고,
    그 뒤로는 바뀐 노트만 온다. 고친 칸은 보내 두면 맥이 볼트에 쓴다 ── */
-const APP_VERSION = '26.10.14-4';                                     // 올릴 때마다 version.json · sw.js 와 같이 올린다
+const APP_VERSION = '26.10.14-5';                                     // 올릴 때마다 version.json · sw.js 와 같이 올린다
 const LOCAL = /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
 const PHONE = location.protocol === 'https:' || (LOCAL && location.search.includes('phone'));   // ?phone = 맥에서 폰 화면 시험
 // 맥에서 폰 화면을 시험할 때는 늘 가짜 연동 서버(node sync/test_sync.mjs --serve)로만 — 진짜 노트에 시험 글이 섞이지 않게
@@ -413,7 +413,7 @@ function syncPhone() {
       keepSY();
     }
     if (!SY.full && !SY.asked) { await post({ op: 'want' }); SY.asked = true; SY.rev = 0; keepSY(); }   // 처음엔 맥에 노트 전부를 달라고
-    const r = await post({ op: 'get', since: SY.rev || 0 });         // 2) 맥에서 바뀐 노트 받기
+    const r = await post({ op: 'get', since: SY.rev || 0, meta: !SY.quotes });   // 2) 맥에서 바뀐 노트 받기 (명언 모음을 놓쳤으면 다시 달라고)
     if (r.err) throw new Error(r.err);
     if (r.stale) { Object.assign(SY, { full: false, asked: false, rev: 0 }); keepSY(); busy = null; return syncPhone(); }   // 너무 오래 안 열었다 → 전부 다시
     saveDocs(r.docs);

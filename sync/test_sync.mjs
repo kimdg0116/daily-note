@@ -57,6 +57,7 @@ const Q = { list: [{ date: B, text: 'Be kind.', toggle: true, on: true }], favs:
 call({ op: 'mac', quotes: Q });
 r = call({ op: 'get', since: rev1 });
 assert.deepEqual(r.quotes, Q); assert.equal(call({ op: 'get', since: r.rev }).quotes, undefined);
+assert.deepEqual(call({ op: 'get', since: r.rev, meta: true }).quotes, Q);              // 놓친 폰은 다시 받는다
 // 폰 수정 → 받은 편지함 → 맥이 옛 노트를 올려도 폰 수정을 얹어서 보낸다
 const rev2 = r.rev;
 call({ op: 'edit', date: C, fm: { mood: { v: 4, b: 3 } }, t: 1000 });
