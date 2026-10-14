@@ -37,7 +37,7 @@ assert S.sec_get(lines, 'today') == '' and "### Today's Tasks\n없습니다😀\
 assert "### Tomorrow's Tasks\n- [ ] 내일\n\n### Today's Tasks" in out
 old = S.sec_set(['> [!note]+ 공부', '> ', '', '> [!abstract]- x'], 'study', '줄1\n\n줄3')      # 공부 칸이 있는 옛 노트
 assert old == ['> [!note]+ 공부', '> 줄1', '>', '> 줄3', '', '> [!abstract]- x'] and S.sec_get(old, 'study') == '줄1\n\n줄3'
-assert S.quote_get(lines) == {'text': 'Be kind.', 'author': 'Someone', 'ko': '', 'flag': '', 'link': '', 'state': 'todo'}
+assert S.quote_get(lines) == {'text': 'Be kind.', 'author': 'Someone', 'ko': '', 'flag': '', 'link': '', 'toggle': True, 'state': 'todo'}
 
 # /명언 이 정리한 뒤의 모양
 done = '''>[!quote]
@@ -53,8 +53,26 @@ done = '''>[!quote]
 ⤷ 모아보기 [[📜 명언 모음]] · 저자·출처 [[🗺 명언]] · 이 저자 [[시드니 스미스 (Sydney Smith)]]'''.split('\n')
 assert S.quote_get(done) == {'text': 'We know nothing of tomorrow.', 'author': 'Sydney Smith', 'ko': '우리는 내일을 모른다.',
                              'flag': '⚠️ 오용 — 실제는 X (1850). → 시드니 스미스 (Sydney Smith)',
-                             'link': '시드니 스미스 (Sydney Smith)', 'state': 'done'}
+                             'link': '시드니 스미스 (Sydney Smith)', 'toggle': True, 'state': 'done'}
 assert S.quote_get(['>[!quote]', '>' + S.FAILED[0], '>— ' + S.FAILED[1]])['state'] == 'failed'
+
+# 예전 노트 (2026-08-08 까지): 명언이 제목 줄에, 번역은 콜아웃 없이 바로 아래 인용 줄에 (또는 빈 [!info] 아래 줄)
+old = S.quote_get(['> [!quote] Keep to the **sunshine**.', '> — Helen Keller', '>', '>⚠️ **출처 불명** — x', '',
+                   '>**햇살 쪽을 향하라.**', '>**두 번째 줄**', '', '⤷ 모아보기 · 이 저자 [[헬렌 켈러 (Helen Keller)]]'])
+assert (old['text'], old['ko'], old['toggle'], old['state']) == ('Keep to the sunshine.', '햇살 쪽을 향하라.', False, 'done'), old
+assert S.quote_get(['> [!quote] A.', '> — B', '', '>[!info]  ', '>"존재한다는 것"', ''])['ko'] == '존재한다는 것'
+assert S.quote_get(['>[!quote]', '>A.', '>— B', '', '> [!info]+ "English again."', '> 한글 번역', '> `INPUT[toggle:quote_체크]`'])['ko'] == '한글 번역'
+
+# 별: 📜 명언 모음 노트의 favorites 만 고친다 (옵시디언 모양 그대로)
+import os, tempfile
+S.MOC = os.path.join(tempfile.mkdtemp(), 'moc.md')
+open(S.MOC, 'w').write('---\ntitle: 명언 모음\nfavorites:\n  - "[[2026-08-16(일)]]"\n  - "[[2026-09-22(화)]]"\ntags:\n  - quote\n---\n# 본문\n')
+S.fav_set('2026-10-13', True); S.fav_set('2026-08-16', False); S.fav_set('2026-10-13', True)
+assert open(S.MOC).read() == '---\ntitle: 명언 모음\nfavorites:\n  - "[[2026-09-22(화)]]"\n  - "[[2026-10-13(화)]]"\ntags:\n  - quote\n---\n# 본문\n'
+S.fav_set('2026-09-22', False); S.fav_set('2026-10-13', False)
+assert 'favorites: []\ntags:' in open(S.MOC).read() and S.fav_get(S.split(open(S.MOC).read())[0]) == []
+S.fav_set('2026-10-13', True)
+assert S.fav_get(S.split(open(S.MOC).read())[0]) == ['2026-10-13']
 
 # 마음 기록 양식은 템플릿에서 읽는다
 mind = S.mind_form()

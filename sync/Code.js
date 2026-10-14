@@ -11,10 +11,10 @@
  * 저장은 Script Properties (gzip + base64, 8000자 조각) 뿐이라 따로 권한이 필요 없다.
  * 연결 코드는 Secret.js 의 CODE (git 제외, clasp 로만 올라감).
  *
- * 폰 → {code, op:'get', since}              → {rev, docs:{날짜:노트}, stale?, want?, dates?, mind?, wait:{날짜:칸 수}, macAt}
+ * 폰 → {code, op:'get', since}              → {rev, docs:{날짜:노트}, stale?, want?, dates?, mind?, quotes?, wait:{날짜:칸 수}, macAt}
  * 폰 → {code, op:'want'}                    → {ok}       모든 노트 다시 받기 (처음 연결할 때)
  * 폰 → {code, op:'edit', date, fm, sec, t}  → {ok}       fm/sec = {키: {v: 새 값, b: 폰이 본 값}}
- * 맥 → {code, op:'mac', put, keep?, done, resync?, dates?, mind?} → {ob, want}
+ * 맥 → {code, op:'mac', put, keep?, done, resync?, dates?, mind?, quotes?} → {ob, want}      quotes = 명언 모음 {list, favs}
  *        resync = {to: 이번 묶음 마지막 날짜, done: 끝인지}, done = [[날짜, 'fm'|'sec', 키, t]]
  *
  * 반영: cd sync && ~/Desktop/app/dosimetrist-calendar-server/tools/node_modules/.bin/clasp push -f
@@ -51,7 +51,7 @@ const OPS = {
     if (since && (meta.floor || 0) > since) r.stale = true;   // 그사이 상자에서 버린 노트가 있다 → 처음부터 다시
     for (const d in bi) if (bi[d][0] > since) r.docs[d] = getJ_('b:' + d);
     for (const d in ob) r.wait[d] = pending_(ob[d]);
-    if ((meta.mrev || 0) > since) { r.dates = meta.dates || []; r.mind = meta.mind || []; }
+    if ((meta.mrev || 0) > since) { r.dates = meta.dates || []; r.mind = meta.mind || []; r.quotes = meta.quotes || null; }
     const want = getJ_('want');
     if (want) {
       want.seen = rev;                                        // 폰이 지금까지 넣은 걸 다 받았다
@@ -85,7 +85,7 @@ const OPS = {
       if (e && e.t === t) delete ob[d][part][k];
       if (ob[d] && !pending_(ob[d])) delete ob[d];
     }
-    if (Object.keys(put).length || q.dates || q.mind) rev++;
+    if (Object.keys(put).length || q.dates || q.mind || q.quotes) rev++;
     for (const d in put) {
       const o = ob[d];
       if (o) for (const part of ['fm', 'sec']) for (const k in o[part]) put[d][part][k] = o[part][k].v;   // 아직 볼트에 안 쓴 폰 수정은 위에 얹는다
@@ -94,6 +94,7 @@ const OPS = {
     if (q.resync && want) { want.from = q.resync.to; want.sent = rev; want.done = !!q.resync.done; setJ_('want', want); }
     if (q.dates) { meta.dates = q.dates; meta.mrev = rev; }
     if (q.mind) { meta.mind = q.mind; meta.mrev = rev; }
+    if (q.quotes) { meta.quotes = q.quotes; meta.mrev = rev; }
     meta.macAt = Date.now();
     setJ_('ob', ob);
     if (Object.keys(put).length) { fit_(bi, meta); setJ_('bi', bi); }

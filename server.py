@@ -164,7 +164,8 @@ def quote_get(lines):
     sp = quote_span(lines)
     if not sp:
         return {'state': 'none'}
-    text, author, flag = [], '', ''
+    head = plain(re.sub(r'^>\s?\[!quote\][+-]?', '', lines[sp[0]]))           # 예전 노트는 명언이 제목 줄에
+    text, author, flag = [head] if head and head.lower() != 'quote of the day' else [], '', ''
     for l in lines[sp[0] + 1:sp[1]]:
         s = l[1:].strip()
         if not author and re.match(r'^[—–-]\s', s):
@@ -173,17 +174,63 @@ def quote_get(lines):
             flag = plain(s)
         elif s and not author:
             text.append(s)
-    ko = link = ''
+    link = ''
     for l in lines[sp[1]:]:
-        m = re.match(r'^>\s?\[!info\][+-]?\s*(.*)$', l)
-        if m and not ko:
-            ko = m.group(1).strip()
         m = re.search(r'이 저자 \[\[([^\]|#]+)', l)
         if m:
             link = m.group(1).strip()
+    # 번역: [!info] 콜아웃의 첫 한글 줄 (예전 노트는 콜아웃 없이 바로 아래 인용 줄에)
+    j = next((k for k in range(sp[1], len(lines)) if re.match(r'^>\s?\[!info\]', lines[k])), None)
+    if j is None:
+        j = sp[1]
+        while j < len(lines) and not lines[j].strip():
+            j += 1
+    ko = ''
+    while j < len(lines) and lines[j].startswith('>') and not ko:
+        k = plain(re.sub(r'^>\s?(\[!\w+\][+-]?)?\s*(- )?', '', lines[j])).strip('"“” ')
+        ko = '' if not k or 'INPUT[' in k or re.match(r'^[A-Za-z]', k) else k
+        j += 1
     failed = not author or author in (FAILED[1], 'zenquotes.io')
-    return {'text': ' '.join(text), 'author': author, 'ko': ko, 'flag': flag, 'link': link,
+    return {'text': plain(' '.join(text)), 'author': author, 'ko': ko, 'flag': flag, 'link': link,
+            'toggle': any('INPUT[toggle:quote_체크]' in l for l in lines),      # 모으기 토글이 생긴(2026-08-09) 뒤 노트
             'state': 'failed' if failed else 'done' if link else 'todo'}
+
+
+# ── 명언 모음: 모으기를 켠 명언(토글 전 노트는 전부) + 별(📜 명언 모음 노트의 favorites) ──
+
+MOC = os.path.join(VAULT, '04 Life', '📜 명언 모음.md')
+FAV = '_fav'                          # 폰에서 별을 바꾸면 그 날짜 수정에 이 키로 실려 온다 (노트에는 안 씀)
+
+
+def fav_get(fm):
+    favs = (yaml.safe_load(fm) or {}).get('favorites') or []
+    return [d for d in (str(x).strip('[]')[:10] for x in favs) if DATE.match(d)]
+
+
+def fav_set(d, on):
+    with FILE_LOCK:
+        fm, body = split(open(MOC, encoding='utf-8').read())
+        favs = [x for x in fav_get(fm) if x != d] + ([d] if on else [])
+        block = 'favorites:' + (''.join(f'\n  - "[[{fname(day(x))}]]"' for x in favs) if favs else ' []')
+        fm, n = re.subn(r'^favorites:.*(?:\n[ \t]*-.*)*', lambda m: block, fm, count=1, flags=re.M)
+        write(MOC, f'---\n{fm if n else fm + chr(10) + block}\n---\n{body}')
+
+
+def quote_list():
+    """모음 후보 전부 (화면이 모으기 켬·토글 여부로 거른다 - 폰은 자기가 고친 값으로)"""
+    try:
+        moc = open(MOC, encoding='utf-8').read()
+    except OSError:
+        moc = '---\n---\n'
+    ko_fb = dict(re.findall(r"'(\d{4}-\d{2}-\d{2})\(.\)': '([^']+)'", moc))   # 명언 모음 노트가 대신 넣은 번역 (예전 노트 7개)
+    out = []
+    for d in note_dates():
+        fm, body = split(open(path(day(d)), encoding='utf-8').read())
+        q = quote_get(body.split('\n'))
+        if q['state'] in ('done', 'todo') and q['text']:
+            out.append({'date': d, 'text': q['text'], 'author': q['author'], 'ko': q['ko'] or ko_fb.get(d, ''), 'flag': q['flag'],
+                        'toggle': q['toggle'], 'on': bool(re.search(r'^quote_체크:\s*true\s*$', fm, re.M))})
+    return {'list': out, 'favs': fav_get(split(moc)[0])}
 
 
 def fetch_quote():
@@ -453,8 +500,10 @@ def sync_once(code):
     st = load_json(SYNC_STATE, {})
     dates = note_dates()
     mt = {d: os.path.getmtime(path(day(d))) for d in dates}
-    mind = mind_form()
-    dh, mh = (hashlib.sha1(json.dumps(x, ensure_ascii=False).encode()).hexdigest() for x in (dates, mind))
+    mind, quotes = mind_form(), quote_list()
+    dh, mh, qh = (hashlib.sha1(json.dumps(x, ensure_ascii=False).encode()).hexdigest() for x in (dates, mind, quotes))
+    if st.get('fmt') != 2:                # 노트 읽는 법이 바뀌었다(예전 명언 형식) → 폰 사본도 한 번 다시 보낸다
+        st.update(up={d: 0 for d in mt} if 'up' in st else dict(mt), fmt=2)
     up = st.setdefault('up', dict(mt))    # 처음엔 지금 상태를 기준으로만 (노트 내용은 폰이 '다시 받기'로 가져간다)
     changed = [d for d in dates if up.get(d) != mt[d]][:40]           # 맥에서 바뀐 노트 (한 번에 40개까지)
     put = {d: phone_doc(day(d)) for d in changed}
@@ -473,14 +522,21 @@ def sync_once(code):
         body['dates'] = dates
     if st.get('mh') != mh:
         body['mind'] = mind
+    if st.get('qh') != qh:
+        body['quotes'] = quotes
     r = sync_post(body)
     if r.get('err'):
         raise RuntimeError('연결 코드가 맞지 않아요' if r['err'] == 'code' else r['err'])
     up.update({d: mt[d] for d in put})
-    st.update(done=[], dh=dh, mh=mh, want=r.get('want'))
+    st.update(done=[], dh=dh, mh=mh, qh=qh, want=r.get('want'))
     for d, o in (r.get('ob') or {}).items():
         if not DATE.match(d):
             continue
+        fav = (o.get('fm') or {}).pop(FAV, None)
+        if fav:
+            if isinstance(fav.get('v'), bool) and os.path.exists(MOC):
+                fav_set(d, fav['v'])
+            st['done'].append([d, 'fm', FAV, fav.get('t')])
         cur = read_day(day(d))
         fmc, secc, acks = pick(cur, cur['mtime'] * 1000, o)
         if fmc or secc:
@@ -564,6 +620,8 @@ class H(BaseHTTPRequestHandler):
             return self.send(200, n)
         if u.path == '/api/days':            # 달력 점: 노트가 있는 날
             return self.send(200, {'dates': note_dates()})
+        if u.path == '/api/quotes':          # 명언 모음 화면
+            return self.send(200, quote_list())
         if u.path == '/api/sync':            # 설정 시트: 폰 연결 코드·마지막으로 맞춘 때
             return self.send(200, dict(SYNC, code=sync_code()))
         if u.path == '/api/job':
@@ -604,6 +662,12 @@ class H(BaseHTTPRequestHandler):
                 start_quote(d)                # 새 노트의 명언은 알아서 /명언
             SYNC_WAKE.set()
             return self.send(200, {'ok': True, 'created': created, 'mtime': mtime})
+        if path_ == '/api/fav':              # 별: 📜 명언 모음 노트의 favorites
+            if not isinstance(body.get('on'), bool) or not os.path.exists(MOC):
+                return self.send(400, {'error': '잘못된 요청'})
+            fav_set(d, body['on'])
+            SYNC_WAKE.set()
+            return self.send(200, {'ok': True})
         if path_ == '/api/quote':
             if not os.path.exists(path(day(d))):
                 return self.send(404, {'error': '노트가 없어요'})

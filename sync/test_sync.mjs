@@ -52,6 +52,11 @@ const rev1 = r.rev;
 r = call({ op: 'get', since: rev1 });
 assert.deepEqual(Object.keys(r.docs), [C]); assert.equal(r.want, undefined);              // 다 받음
 assert.equal(call({ op: 'mac' }).want, null);
+// 명언 모음은 바뀔 때만 오고, 폰이 받아 간 뒤로는 안 온다
+const Q = { list: [{ date: B, text: 'Be kind.', toggle: true, on: true }], favs: [B] };
+call({ op: 'mac', quotes: Q });
+r = call({ op: 'get', since: rev1 });
+assert.deepEqual(r.quotes, Q); assert.equal(call({ op: 'get', since: r.rev }).quotes, undefined);
 // 폰 수정 → 받은 편지함 → 맥이 옛 노트를 올려도 폰 수정을 얹어서 보낸다
 const rev2 = r.rev;
 call({ op: 'edit', date: C, fm: { mood: { v: 4, b: 3 } }, t: 1000 });

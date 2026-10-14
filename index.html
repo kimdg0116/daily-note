@@ -130,7 +130,7 @@ button { font-family:inherit; cursor:pointer; }
 .brand { flex:none; margin-right:auto; }
 .datebtn { display:flex; align-items:center; gap:7px; height:32px; padding:0 12px; font-family:var(--num); font-size:15px; font-weight:600; border:1px solid var(--line); border-radius:999px; background:var(--card); color:var(--fg); }
 .datebtn svg { width:16px; height:16px; color:var(--acc); }
-@media (max-width:520px) { .brand { display:none; } .top { justify-content:flex-end; } .datebtn { margin-right:auto; } }
+@media (max-width:520px) { .brand { display:none; } .top { justify-content:flex-end; gap:4px; } .datebtn { margin-right:auto; padding:0 10px; white-space:nowrap; } .top .icon-btn { width:33px; } .top .pill { padding:0 11px; } }
 .phone .mac-only, html:not(.phone) .phone-only { display:none !important; }
 .pill { flex:none; height:32px; padding:0 13px; font-size:13px; font-weight:700; border:1px solid var(--line); border-radius:999px; background:var(--card); color:var(--acc); }
 
@@ -262,6 +262,24 @@ footer { margin-top:24px; }
 .sync-in { display:flex; gap:8px; margin-top:10px; }
 .sync-in .line { flex:1; min-width:0; font-family:var(--num); letter-spacing:.12em; text-transform:uppercase; }
 .sync-in .line.plain { font-family:inherit; letter-spacing:normal; text-transform:none; }
+/* 명언 모음: 별 단 명언이 위로 */
+.panel .sheet.qs { max-width:560px; }
+.qsec { display:flex; align-items:center; gap:6px; margin:18px 0 4px; font-size:13px; font-weight:700; color:var(--mute); }
+.qsec svg { width:15px; height:15px; }
+.qrow { display:flex; align-items:flex-start; gap:6px; padding:10px 0; border-top:1px solid var(--line); }
+.qsec + .qrow { border-top:0; }
+.qrow.fav { margin:8px 0; padding:10px 12px 10px 8px; border:0; border-left:4px solid var(--acc); border-radius:0 12px 12px 0; background:var(--soft); }
+.qtext { flex:1; min-width:0; padding:0; border:0; background:none; font:inherit; color:var(--fg); text-align:left; }
+.qtext b { display:block; font-size:15px; font-weight:600; line-height:1.45; }
+.qrow.fav .qtext b { font-weight:700; }
+.qtext .qko { display:block; margin-top:3px; font-size:13px; line-height:1.5; color:var(--deep); word-break:keep-all; }
+.qtext .qwho { display:flex; flex-wrap:wrap; align-items:center; gap:2px 8px; margin-top:4px; font-size:12px; font-weight:600; color:var(--mute); }
+.qflag { display:inline-flex; align-items:center; gap:3px; color:var(--orange-ink); }
+.qflag svg { width:13px; height:13px; }
+.star { flex:none; display:grid; place-items:center; width:34px; height:30px; padding:0; border:0; background:none; color:color-mix(in srgb, var(--mute) 55%, transparent); }
+.star svg { width:21px; height:21px; }
+.star.on { color:var(--acc); }
+.star.on svg { fill:currentColor; }
 .upd { position:fixed; left:var(--gut); right:var(--gut); bottom:calc(20px + env(safe-area-inset-bottom, 0px)); z-index:35; padding:13px; font-size:15px; font-weight:700; border:0; border-radius:12px; background:var(--acc); color:#fff; box-shadow:0 6px 20px color-mix(in srgb, var(--acc) 35%, transparent); }
 .ver { margin:0; text-align:right; font-family:Oswald, sans-serif; font-size:11px; letter-spacing:.06em; color:var(--mute); }
 #toast { position:fixed; left:var(--gut); right:var(--gut); bottom:calc(20px + env(safe-area-inset-bottom, 0px)); z-index:40; padding:13px; border-radius:12px; background:var(--toast); color:#fff; font-weight:600; text-align:center; opacity:0; transition:opacity .2s; pointer-events:none; }
@@ -275,6 +293,7 @@ footer { margin-top:24px; }
   <button type="button" class="datebtn" id="cal" aria-label="달력 열기"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg><span id="dateText"></span></button>
   <button type="button" class="icon-btn" id="next" aria-label="다음 날"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button>
   <button type="button" class="pill" id="today">오늘</button>
+  <button type="button" class="icon-btn" id="quotes" aria-label="명언 모음" title="명언 모음"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 11H6a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v6c0 2.7-1.3 4.3-4 5M19 11h-4a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v6c0 2.7-1.3 4.3-4 5"/></svg></button>
   <button type="button" class="icon-btn" id="obs" aria-label="옵시디언에서 열기" title="옵시디언에서 열기"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg></button>
   <button type="button" class="icon-btn" id="gear" aria-label="설정 열기"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg></button>
 </div>
@@ -291,6 +310,7 @@ footer { margin-top:24px; }
   <div class="settings-row col phone-only"><div><b>옵시디언 볼트 이름</b><p>'옵시디언에서 열기'가 폰의 이 볼트를 열어요</p></div>
     <div class="sync-in"><input id="vaultName" class="line plain" placeholder="obsidian phone" autocomplete="off" autocapitalize="off" spellcheck="false"></div></div>
 </div></div>
+<div id="qpanel" class="panel" role="dialog" aria-modal="true" aria-label="명언 모음" hidden><div class="sheet qs" id="qBody"></div></div>
 <div id="calendar" class="panel" role="dialog" aria-modal="true" aria-label="달력" hidden><div class="sheet cal" id="calBody"></div></div>
 <div id="toast" role="status" aria-live="polite"></div>
 
@@ -306,7 +326,9 @@ const ICON = {
   dark: svg('<path d="M20 14.6A8.5 8.5 0 0 1 9.4 4 7.5 7.5 0 1 0 20 14.6z"/>'),
   warn: svg('<path d="M12 3.8 2.6 20h18.8z"/><path d="M12 10v4.4M12 17.3v.01"/>'),
   info: svg('<circle cx="12" cy="12" r="9"/><path d="M12 11v5.5M12 7.6v.01"/>'),
+  star: svg('<path d="m12 3.6 2.6 5.3 5.8.85-4.2 4.1 1 5.8L12 16.9l-5.2 2.75 1-5.8-4.2-4.1 5.8-.85z"/>'),
 };
+const FAV = '_fav';                                                    // 폰에서 별을 바꾸면 그 날짜 수정에 이 키로 실어 보낸다 (맥이 명언 모음 노트에 쓴다)
 const ymd = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 const today = () => ymd(new Date());
 const shift = (s, n) => { const d = new Date(s + 'T12:00'); d.setDate(d.getDate() + n); return ymd(d); };
@@ -318,7 +340,7 @@ function api(u, body) {
 /* ── 폰: 맥 서버 대신 동기화 서버(Apps Script, sync/Code.js)를 우체통으로 쓴다.
    우체통은 오가는 것만 잠깐 들고, 노트 사본은 폰 안(IndexedDB)에 전부 둔다. 처음 연결하면 맥이 모든 노트를 나눠 보내고,
    그 뒤로는 바뀐 노트만 온다. 고친 칸은 보내 두면 맥이 볼트에 쓴다 ── */
-const APP_VERSION = '26.10.14-3';                                     // 올릴 때마다 version.json · sw.js 와 같이 올린다
+const APP_VERSION = '26.10.14-4';                                     // 올릴 때마다 version.json · sw.js 와 같이 올린다
 const LOCAL = /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
 const PHONE = location.protocol === 'https:' || (LOCAL && location.search.includes('phone'));   // ?phone = 맥에서 폰 화면 시험
 // 맥에서 폰 화면을 시험할 때는 늘 가짜 연동 서버(node sync/test_sync.mjs --serve)로만 — 진짜 노트에 시험 글이 섞이지 않게
@@ -397,6 +419,8 @@ function syncPhone() {
     saveDocs(r.docs);
     if (r.dates) SY.dates = r.dates;
     if (r.mind) SY.mind = r.mind;
+    if (r.quotes) SY.quotes = r.quotes;
+    for (const d in DOCS) if (DOCS[d].fm && FAV in DOCS[d].fm && !r.wait?.[d] && !OUT[d]) { delete DOCS[d].fm[FAV]; saveDocs({ [d]: DOCS[d] }); }   // 맥이 명언 모음에 썼다
     if (SY.asked && !r.want) Object.assign(SY, { full: true, asked: false });
     Object.assign(SY, { receiving: !!r.want, wait: r.wait, macAt: r.macAt, rev: r.rev, at: Date.now(), err: '' });
     keepSY();
@@ -411,6 +435,7 @@ async function phoneRefresh(r) {                                      // 받은 
   if ((r?.docs?.[D.date] || (!D.exists && DOCS[D.date])) && !typing) { D = await phoneDay(D.date); T = { today: parseTasks(D.sec.today), tomorrow: parseTasks(D.sec.tomorrow) }; stateText = syncText(D.date); render(); }
   else if (!pending() && !saving) state(syncText(D.date));
   if (!$('#settings').hidden) drawSync();
+  if (!$('#qpanel').hidden) loadQuotes();
 }
 if (PHONE) api = async (u, body) => {
   const [p, qs] = u.split('?');
@@ -418,6 +443,14 @@ if (PHONE) api = async (u, body) => {
   if (p === '/api/save') return phoneSave(body);
   if (p === '/api/days') { await ready; return { dates: [...new Set([...(SY.dates || []), ...Object.keys(DOCS).filter(d => DOCS[d].exists), ...Object.keys(OUT)])] }; }
   if (p === '/api/job') return { state: 'idle' };
+  if (p === '/api/quotes') {                                          // 맥이 보낸 명언 모음 + 폰에서 고친 것(모으기·별)
+    await ready;
+    if (!SY.quotes) throw new Error(SY.code ? '맥에서 명언 모음을 받아 오는 중이에요' : '설정 > 폰 연동에서 맥과 연결하면 보여요');
+    const f = (d, k) => OUT[d]?.fm?.[k] ? OUT[d].fm[k].v : DOCS[d]?.fm?.[k];
+    return { list: SY.quotes.list.map(q => ({ ...q, on: DOCS[q.date] || OUT[q.date] ? f(q.date, 'quote_체크') === true : q.on })),
+      favs: SY.quotes.list.map(q => q.date).filter(d => f(d, FAV) ?? SY.quotes.favs.includes(d)) };
+  }
+  if (p === '/api/fav') return phoneSave({ date: body.date, fm: { [FAV]: body.on } });
   if (p === '/api/open') { location.href = `obsidian://open?vault=${encodeURIComponent(vaultName())}&file=${encodeURIComponent(body.rel)}`; return { ok: true }; }
   throw new Error('명언 정리는 맥에서 해요');
 };
@@ -595,9 +628,9 @@ Object.assign(CARDS, {
       else if (q.state === 'todo' && PHONE) h += '<p class="muted">맥에서 번역과 저자 정리를 하면 여기에 보여요</p>';
       else if (q.state === 'todo') h += (fail ? `<div class="job bad">정리하지 못했어요 · ${esc(dash(J.result).slice(-300))}</div>` : '')
         + `<div class="btns"><button type="button" class="main" data-act="quote">${fail ? '다시 정리하기' : '명언 정리하기'}</button></div>`;
-      if (q.link) h += `<div class="btns"><button type="button" class="pill" data-open="04 Life/명언/저자/${esc(q.link)}">인물 노트 열기</button><button type="button" class="pill" data-open="04 Life/📜 명언 모음">명언 모음</button></div>`;
+      if (q.link) h += `<div class="btns"><button type="button" class="pill" data-open="04 Life/명언/저자/${esc(q.link)}">인물 노트 열기</button><button type="button" class="pill" data-act="quotes">명언 모음</button></div>`;
     }
-    const chk = q.state === 'todo' || q.state === 'done' ? `<button type="button" class="mhead r${D.fm['quote_체크'] === true ? ' on' : ''}" style="width:auto;padding:0;font-size:13px;gap:8px;color:var(--mute)" data-tog="quote_체크">체크<span class="sw"></span></button>` : '';
+    const chk = q.state === 'todo' || q.state === 'done' ? `<button type="button" class="mhead r${D.fm['quote_체크'] === true ? ' on' : ''}" style="width:auto;padding:0;font-size:13px;gap:8px;color:var(--mute)" data-tog="quote_체크">모으기<span class="sw"></span></button>` : '';
     return `<section class="card quote" id="c-quote"><h3>오늘의 명언${chk}</h3>${h}</section>`;
   },
 });
@@ -656,6 +689,7 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Enter' && el.classList?.contains('oneline') && !e.isComposing) e.preventDefault();
   if (e.key === 'Escape' && !$('#calendar').hidden) return openCal(false);
   if (e.key === 'Escape' && !$('#settings').hidden) return openSettings(false);
+  if (e.key === 'Escape' && !$('#qpanel').hidden) return openQuotes(false);
   if (!e.metaKey || !D) return;
   if (e.key === '[') { e.preventDefault(); load(shift(D.date, -1)); }
   else if (e.key === ']') { e.preventDefault(); load(shift(D.date, 1)); }
@@ -678,6 +712,7 @@ document.addEventListener('click', e => {
   else if (act === 'cal') openCal(true);
   else if (act === 'obs') { if (!D?.exists) return toast('아직 노트가 없어요. 쓰기 시작하면 만들어져요'); flush().then(() => api('/api/open', { rel: '04 Life/Planner/Daily/' + D.name })); }
   else if (act === 'gear') openSettings(true);
+  else if (act === 'quotes') openQuotes(true);
   else if (act === 'closeSet') openSettings(false);
   else if (act === 'link') {
     const c = $('#syncCode').value.trim().toUpperCase();
@@ -695,11 +730,11 @@ document.addEventListener('click', e => {
 let calYm = '', DAYS = new Set();
 // 시트가 열려 있으면 기록 한 칸을 잡아 둔다 → 갤럭시 뒤로 가기가 앱을 닫지 않고 시트를 닫는다
 function syncHistory() {
-  const open = !$('#calendar').hidden || !$('#settings').hidden, st = history.state && history.state.sheet;
+  const open = !$('#calendar').hidden || !$('#settings').hidden || !$('#qpanel').hidden, st = history.state && history.state.sheet;
   if (open && !st) history.pushState({ sheet: 1 }, '');
   else if (!open && st) history.back();
 }
-addEventListener('popstate', () => { $('#calendar').hidden = true; $('#settings').hidden = true; });
+addEventListener('popstate', () => { $('#calendar').hidden = true; $('#settings').hidden = true; $('#qpanel').hidden = true; });
 async function openCal(on) {
   $('#calendar').hidden = !on;
   syncHistory();
@@ -732,6 +767,37 @@ $('#calendar').addEventListener('click', e => {
   else if (b.dataset.calm) { const [y, m] = calYm.split('-').map(Number), n = +b.dataset.calm; calYm = n ? ymd(new Date(y, m - 1 + n, 1)).slice(0, 7) : today().slice(0, 7); drawCal(); }
 });
 $('#settings').addEventListener('click', e => { if (e.target.id === 'settings') openSettings(false); });
+
+/* ── 명언 모음: 모으기를 켠 명언(토글이 생기기 전 노트는 전부), 별 단 명언은 위로. 별은 옵시디언 📜 명언 모음의 favorites 와 같다 ── */
+let QS = null;
+function openQuotes(on) { $('#qpanel').hidden = !on; syncHistory(); if (on) { drawQuotes(); flush().then(loadQuotes); } }
+async function loadQuotes() { QS = await api('/api/quotes').catch(e => ({ err: e.message })); drawQuotes(); }
+function drawQuotes() {
+  const head = '<div class="head"><h3>명언 모음</h3><button type="button" data-act="closeQ">닫기</button></div>';
+  if (!QS || QS.err) return void ($('#qBody').innerHTML = head + `<p class="muted">${esc(QS ? QS.err : '불러오는 중')}</p>`);
+  const favs = new Set(QS.favs), all = QS.list.slice().reverse(), got = all.filter(q => !q.toggle || q.on), top = all.filter(q => favs.has(q.date));
+  const when = s => { const d = new Date(s + 'T12:00'); return (s.slice(0, 4) === today().slice(0, 4) ? '' : d.getFullYear() + '. ') + `${d.getMonth() + 1}. ${d.getDate()}. (${WD[d.getDay()]})`; };
+  const flag = f => f ? `<span class="qflag">${ICON[f.startsWith('ℹ') ? 'info' : 'warn']}${esc(dash(f.replace(/^[⚠ℹ]\uFE0F?\s*/, '').split(/\s[—–-]\s/)[0]))}</span>` : '';
+  const row = (q, cls = '') => `<div class="qrow${cls}"><button type="button" class="star${favs.has(q.date) ? ' on' : ''}" data-star="${q.date}" aria-label="마음이 가는 명언" aria-pressed="${favs.has(q.date)}">${ICON.star}</button>
+    <button type="button" class="qtext" data-qday="${q.date}"><b>${esc(dash(q.text))}</b>${q.ko ? `<span class="qko">${esc(dash(q.ko))}</span>` : ''}
+    <span class="qwho"><span>${esc(dash(q.author))} · ${when(q.date)}</span>${flag(q.flag)}</span></button></div>`;
+  $('#qBody').innerHTML = head + `<p class="muted">모은 명언 ${got.length}개 · 별 ${top.length}개</p>`
+    + `<div class="qsec">${ICON.star}마음이 가는 명언</div>` + (top.map(q => row(q, ' fav')).join('') || '<p class="muted">아래에서 별을 누르면 여기로 올라와요</p>')
+    + '<div class="qsec">모은 명언 · 최근 순</div>' + (got.map(q => row(q)).join('') || '<p class="muted">오늘의 명언 카드에서 모으기를 켜면 여기에 모여요</p>');
+}
+$('#qpanel').addEventListener('click', e => {
+  if (e.target.id === 'qpanel') return openQuotes(false);
+  const b = e.target.closest('button');
+  if (!b) return;
+  e.stopPropagation();
+  if (b.dataset.act === 'closeQ') openQuotes(false);
+  else if (b.dataset.qday) { openQuotes(false); load(b.dataset.qday); }
+  else if (b.dataset.star && QS?.favs) {
+    const d = b.dataset.star, on = !QS.favs.includes(d);
+    QS.favs = on ? [...QS.favs, d] : QS.favs.filter(x => x !== d); drawQuotes();
+    api('/api/fav', { date: d, on }).catch(err => { toast('별을 저장하지 못했어요 · ' + err.message); loadQuotes(); });
+  }
+});
 $('#vaultName').addEventListener('change', e => { try { localStorage.setItem('dn.vault', e.target.value.trim()); } catch (x) {} toast('볼트 이름을 바꿨어요'); });
 // 옵시디언에서 고치고 돌아오면 새로 읽는다 (쓰는 중이 아닐 때만)
 addEventListener('focus', async () => {
