@@ -148,7 +148,9 @@ textarea:focus, .line:focus { border-color:var(--acc); background:var(--card); }
 /* 글칸 편집기(CodeMirror): 옵시디언처럼 **굵게** 기호는 숨기고(커서가 그 안에 오면 흐리게 보임), 줄 맨 앞 '- ' 는 점 */
 #view .cm-editor { border:1px solid var(--line); border-radius:12px; background:var(--bg); font-size:15px; }
 #view .cm-editor.cm-focused { outline:none; border-color:var(--acc); background:var(--card); }
-#view .cm-editor .cm-scroller { font-family:inherit; line-height:1.6; }
+/* 글칸은 줄바꿈하고 내용만큼 늘어나니 안쪽 스크롤이 필요 없다. 스크롤 칸으로 두면 웹킷이 처음 그릴 때 잠깐 넘친 걸로
+   가로·세로 막대가 서로를 붙잡아 남는다 (스크롤바 '항상 보기' 맥에서 보임) */
+#view .cm-editor .cm-scroller { font-family:inherit; line-height:1.6; overflow:visible; }
 #view .cm-editor .cm-content { -webkit-user-select:text; user-select:text; min-height:44px; padding:10px 0; color:var(--fg); caret-color:var(--fg); }
 #view .cm-editor.big .cm-content { min-height:118px; }
 #view .cm-editor .cm-line { padding:0 12px; }
@@ -358,7 +360,7 @@ function api(u, body) {
 /* ── 폰: 맥 서버 대신 동기화 서버(Apps Script, sync/Code.js)를 우체통으로 쓴다.
    우체통은 오가는 것만 잠깐 들고, 노트 사본은 폰 안(IndexedDB)에 전부 둔다. 처음 연결하면 맥이 모든 노트를 나눠 보내고,
    그 뒤로는 바뀐 노트만 온다. 고친 칸은 보내 두면 맥이 볼트에 쓴다 ── */
-const APP_VERSION = '26.10.23-1';                                     // 올릴 때마다 version.json · sw.js 와 같이 올린다
+const APP_VERSION = '26.10.23-2';                                     // 올릴 때마다 version.json · sw.js 와 같이 올린다
 const LOCAL = /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
 const PHONE = location.protocol === 'https:' || (LOCAL && location.search.includes('phone'));   // ?phone = 맥에서 폰 화면 시험
 // 맥에서 폰 화면을 시험할 때는 늘 가짜 연동 서버(node sync/test_sync.mjs --serve)로만 — 진짜 노트에 시험 글이 섞이지 않게
