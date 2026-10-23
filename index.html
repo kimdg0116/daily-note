@@ -358,7 +358,7 @@ function api(u, body) {
 /* ── 폰: 맥 서버 대신 동기화 서버(Apps Script, sync/Code.js)를 우체통으로 쓴다.
    우체통은 오가는 것만 잠깐 들고, 노트 사본은 폰 안(IndexedDB)에 전부 둔다. 처음 연결하면 맥이 모든 노트를 나눠 보내고,
    그 뒤로는 바뀐 노트만 온다. 고친 칸은 보내 두면 맥이 볼트에 쓴다 ── */
-const APP_VERSION = '26.10.15-1';                                     // 올릴 때마다 version.json · sw.js 와 같이 올린다
+const APP_VERSION = '26.10.23-1';                                     // 올릴 때마다 version.json · sw.js 와 같이 올린다
 const LOCAL = /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
 const PHONE = location.protocol === 'https:' || (LOCAL && location.search.includes('phone'));   // ?phone = 맥에서 폰 화면 시험
 // 맥에서 폰 화면을 시험할 때는 늘 가짜 연동 서버(node sync/test_sync.mjs --serve)로만 — 진짜 노트에 시험 글이 섞이지 않게
@@ -986,15 +986,29 @@ function bold(v) {
   return true;
 }
 
+// 맥 사파리(WKWebView)는 한글 조합 중 Enter 를 치면 compositionend 를 keydown 보다 먼저 보낸다.
+// CodeMirror 는 그 직후 100ms 안의 키를 '조합 확정용'으로 보고 버리는데(일본어용), 한글은 그 Enter 가 줄바꿈이라
+// 브라우저 기본 동작이 줄을 넣고 그걸 CodeMirror 가 두 줄로 읽는다 → 그 Enter 만 우리가 처리한다.
+// keyCode 13 = 입력기가 삼키지 않은 Enter (한자 후보 고르는 Enter 는 229 라 그대로 둔다)
+const MAC_SAFARI = /Apple Computer/.test(navigator.vendor) && !/Mobile\/\w+/.test(navigator.userAgent) && navigator.maxTouchPoints <= 2;
+function koEnter(v) {
+  let end = 0;
+  v.dom.addEventListener('compositionend', () => { end = Date.now(); }, true);
+  v.dom.addEventListener('keydown', e => {
+    if (e.keyCode === 13 && !e.isComposing && Date.now() - end < 100 && !e.metaKey && !e.ctrlKey && !e.altKey) { e.preventDefault(); enter(v); }
+  }, true);
+  return v;
+}
+
 window.CM = {
-  editor: (text, ph, onChange) => new EditorView({ state: EditorState.create({ doc: text, extensions: [
+  editor: (text, ph, onChange) => (MAC_SAFARI ? koEnter : v => v)(new EditorView({ state: EditorState.create({ doc: text, extensions: [
     history(),
     keymap.of([{ key: 'Enter', run: enter }, { key: 'Tab', run: v => indent(v, false), shift: v => indent(v, true) }, { key: 'Mod-b', run: bold },
       ...historyKeymap, ...defaultKeymap]),
     EditorView.lineWrapping, EditorState.tabSize.of(4), placeholder(ph), live,
     EditorView.contentAttributes.of({ spellcheck: 'false', autocorrect: 'off', autocapitalize: 'off' }),
     EditorView.updateListener.of(u => { if (u.docChanged) onChange(u.state.doc.toString()); }),
-  ] }) }),
+  ] }) })),
 };
 enhance(document.getElementById('view'));
 </script>
