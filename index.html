@@ -171,11 +171,13 @@ textarea:focus, .line:focus { border-color:var(--acc); background:var(--card); }
 .newnote { margin:-4px 0 12px; padding:10px 14px; font-size:14px; border-radius:12px; background:var(--soft); color:var(--deep); }
 
 /* 할 일 */
-.task { display:flex; align-items:center; gap:8px; padding:3px 0 3px calc(var(--ind) * 24px); }
-.task input { flex:1; min-width:0; padding:5px 0; font:inherit; font-size:15px; border:0; border-bottom:1px solid transparent; background:none; color:var(--fg); outline:none; }
-.task input:focus { border-bottom-color:var(--line); }
-.task.done input { color:var(--mute); text-decoration:line-through; }
-.box { flex:none; width:20px; height:20px; padding:0; border:2px solid var(--line); border-radius:6px; background:var(--card); }
+.task { display:flex; align-items:flex-start; gap:8px; padding:3px 0 3px calc(var(--ind) * 24px); }
+/* 긴 할 일은 줄이 넘어가게 (한 줄 input 이면 폰에서 뒤가 잘렸다). 체크박스·점은 첫 줄에 맞춘다 */
+.task textarea { flex:1; min-width:0; min-height:0; padding:5px 0; font-size:15px; line-height:22px; border:0; border-bottom:1px solid transparent; border-radius:0; background:none; }
+.task textarea:focus { border-bottom-color:var(--line); background:none; }
+.task.done textarea { color:var(--mute); text-decoration:line-through; }
+.task .dot, .task .when { line-height:22px; margin-top:5px; }
+.box { flex:none; width:20px; height:20px; margin-top:6px; padding:0; border:2px solid var(--line); border-radius:6px; background:var(--card); }
 .task.done .box { border-color:var(--acc); background:var(--acc) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m5 12.5 4.5 4.5L19 7.5'/%3E%3C/svg%3E") center/14px no-repeat; }
 .dot { flex:none; width:20px; text-align:center; color:var(--mute); }
 .when { flex:none; font-size:12px; color:var(--mute); }
@@ -360,7 +362,7 @@ function api(u, body) {
 /* ── 폰: 맥 서버 대신 동기화 서버(Apps Script, sync/Code.js)를 우체통으로 쓴다.
    우체통은 오가는 것만 잠깐 들고, 노트 사본은 폰 안(IndexedDB)에 전부 둔다. 처음 연결하면 맥이 모든 노트를 나눠 보내고,
    그 뒤로는 바뀐 노트만 온다. 고친 칸은 보내 두면 맥이 볼트에 쓴다 ── */
-const APP_VERSION = '26.10.23-2';                                     // 올릴 때마다 version.json · sw.js 와 같이 올린다
+const APP_VERSION = '26.10.26-1';                                     // 올릴 때마다 version.json · sw.js 와 같이 올린다
 const LOCAL = /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
 const PHONE = location.protocol === 'https:' || (LOCAL && location.search.includes('phone'));   // ?phone = 맥에서 폰 화면 시험
 // 맥에서 폰 화면을 시험할 때는 늘 가짜 연동 서버(node sync/test_sync.mjs --serve)로만 — 진짜 노트에 시험 글이 섞이지 않게
@@ -534,7 +536,7 @@ const saveTasks = k => setSec(k, T[k].map(taskLine).join('\n'));
 function taskRows(k) {
   return `<div class="tasks">${T[k].map((t, i) => `<div class="task${t.box === 'x' ? ' done' : ''}" style="--ind:${t.ind}">
     ${t.box != null ? `<button type="button" class="box" data-box="${k}:${i}" aria-label="끝냄 표시"></button>` : `<span class="dot">${t.bullet ? '•' : ''}</span>`}
-    <input data-task="${k}:${i}" value="${esc(t.text)}" placeholder="할 일">${t.done ? `<span class="when num">${t.done.slice(5).replace('-', '.')}</span>` : ''}</div>`).join('')
+    <textarea data-task="${k}:${i}" rows="1" placeholder="할 일">${esc(t.text)}</textarea>${t.done ? `<span class="when num">${t.done.slice(5).replace('-', '.')}</span>` : ''}</div>`).join('')
     || '<p class="muted">없어요</p>'}</div><button type="button" class="add" data-add="${k}">+ 추가</button>`;
 }
 function redrawTasks(k, i, caret) {
@@ -563,7 +565,9 @@ function taskKey(e, el) {
     const p = L[i - 1], c = p.text.length;
     p.text += t.text; L.splice(i, 1); redrawTasks(k, i - 1, c);
   } else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
-    const to = document.querySelector(`[data-task="${k}:${i + (e.key === 'ArrowUp' ? -1 : 1)}"]`);
+    const up = e.key === 'ArrowUp', wrapped = el.scrollHeight > 2 * parseFloat(getComputedStyle(el).lineHeight);
+    if (wrapped && el.selectionStart !== (up ? 0 : el.value.length)) return;     // 여러 줄 할 일: 그 안에서 먼저 움직인다
+    const to = document.querySelector(`[data-task="${k}:${i + (up ? -1 : 1)}"]`);
     if (to) { e.preventDefault(); to.focus(); }
   }
 }
@@ -697,7 +701,12 @@ async function refreshQuote() {
 /* ── 입력 ── */
 document.addEventListener('input', e => {
   const el = e.target;
-  if (el.dataset.task) { const [k, i] = el.dataset.task.split(':'); T[k][+i].text = el.value; return saveTasks(k); }
+  if (el.dataset.task) {
+    const [k, i] = el.dataset.task.split(':'), n = el.value.indexOf('\n');
+    T[k][+i].text = el.value.replace(/\n/g, '');
+    if (n >= 0) { el.value = T[k][+i].text; el.setSelectionRange(n, n); return taskKey({ key: 'Enter', preventDefault() {} }, el); }  // 폰 한글 조합 중 Enter·붙여넣기로 들어온 줄바꿈 = 새 할 일
+    grow(el); return saveTasks(k);
+  }
   if (el.classList.contains('oneline') && el.value.includes('\n')) el.value = el.value.replace(/\s*\n+\s*/g, ' ');
   if (el.tagName === 'TEXTAREA') grow(el);
   if (el.dataset.fm) setFm(el.dataset.fm, el.value);

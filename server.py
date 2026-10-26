@@ -90,6 +90,8 @@ def fm_set(fm, key, val):
     lines = fm.split('\n') if fm else []
     new = [f'{key}:'] if val is None else \
         yaml.dump({key: val}, Dumper=Dumper, allow_unicode=True, sort_keys=False, width=10 ** 9).rstrip('\n').split('\n')
+    if new[-1] == '...':                  # 끝에 빈 줄이 있는 글(|+)이면 yaml 이 문서 끝 표시를 붙인다 → 뒤 키가 다 깨진다
+        new.pop()
     i = next((k for k, l in enumerate(lines) if re.match(rf'^{re.escape(key)}:(\s|$)', l)), None)
     if i is None:
         return '\n'.join(lines + new)

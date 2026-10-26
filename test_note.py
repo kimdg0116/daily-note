@@ -23,6 +23,8 @@ y = yaml.safe_load(fm)
 assert y['Crossfit_WOD'] == 'A\n\n  B' and y['Crossfit'] is True and y['mood'] is None and y['highlight'] == 'x: "y" #z'
 assert y['tags'] == ['daily'] and y['회고_기록'] == '잘 됨' and str(y['date']) == '2026-10-14'
 assert 'Crossfit_WOD: |-' in fm
+fm2 = S.fm_set(fm, 'Crossfit_WOD', 'A\n\n')                  # 끝에 빈 줄: |+ 뒤에 '...' 가 붙으면 안 된다 (2026-10-26)
+assert '...' not in fm2 and yaml.safe_load(fm2)['Crossfit_WOD'] == 'A\n\n' and yaml.safe_load(fm2)['Crossfit'] is True
 
 # 본문 칸: 쓰고 다시 읽으면 같다
 lines = body.split('\n')
