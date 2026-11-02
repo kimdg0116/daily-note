@@ -81,7 +81,8 @@ mind = S.mind_form()
 names = [m['name'] for m in mind if 'name' in m]
 assert names == ['회고', '음미하기', '오늘의발견', '오늘의법칙', '사건체크', '화나는날', '자책하는날', '사람과거리', '주간점검'], names
 assert [i for i, m in enumerate(mind) if m.get('sep')] == [4, 9]        # 묶음: 매일 / 힘든 날 / 주 1회
-assert [sum(len(i['ask']) for i in m['items']) for m in mind[5:9]] == [2, 4, 3, 2]     # 힘든 날 질문 11개
+assert [sum(len(i['ask']) for i in m['items']) for m in mind[5:9]] == [3, 4, 3, 2]     # 힘든 날 질문 12개
+assert len(mind[0]['items']) == 1 and len(mind[0]['items'][0]['ask']) == 2             # 회고: 질문 둘, 답칸 하나
 assert [len(m['items']) for m in mind[5:9]] == [2, 1, 1, 1]             # 답칸은 묶음마다 하나 (사건체크만 둘)
 assert [m['check'] for m in mind[:4]] == [''] * 4 and mind[5]['check'] == '사건_체크'    # 매일 칸은 토글 없이 늘 펼친다
 assert [i['field'] for i in mind[10]['items']] == ['주간_법칙', '주간_본보기']
