@@ -79,10 +79,12 @@ assert S.fav_get(S.split(open(S.MOC).read())[0]) == ['2026-10-13']
 # 마음 기록 양식은 템플릿에서 읽는다
 mind = S.mind_form()
 names = [m['name'] for m in mind if 'name' in m]
-assert names == ['회고', '음미하기', '오늘의발견', '오늘의법칙', '사건체크', '오늘밤', '불편과불행', '주간점검'], names
-assert [i for i, m in enumerate(mind) if m.get('sep')] == [4, 8]        # 묶음: 매일 / 힘든 날 / 주 1회
+assert names == ['회고', '음미하기', '오늘의발견', '오늘의법칙', '사건체크', '화나는날', '자책하는날', '사람과거리', '주간점검'], names
+assert [i for i, m in enumerate(mind) if m.get('sep')] == [4, 9]        # 묶음: 매일 / 힘든 날 / 주 1회
+assert [sum(len(i['ask']) for i in m['items']) for m in mind[5:9]] == [2, 4, 3, 2]     # 힘든 날 질문 11개
+assert [len(m['items']) for m in mind[5:9]] == [2, 1, 1, 1]             # 답칸은 묶음마다 하나 (사건체크만 둘)
 assert [m['check'] for m in mind[:4]] == [''] * 4 and mind[5]['check'] == '사건_체크'    # 매일 칸은 토글 없이 늘 펼친다
-assert [i['field'] for i in mind[9]['items']] == ['주간_법칙', '주간_본보기']
+assert [i['field'] for i in mind[10]['items']] == ['주간_법칙', '주간_본보기']
 
 # 템플릿에서 빠진 칸: 그 노트 본문의 양식으로 읽고, 쓴 칸만 앱에 보인다
 body = '''### Journal
