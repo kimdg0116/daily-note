@@ -303,13 +303,13 @@ def render(d, quote_md):
     return re.sub(r'<%[*_-]?(.*?)[-_]?%>', block, open(TEMPLATE, encoding='utf-8').read(), flags=re.S)
 
 
-def mind_form():
+def mind_form(text=None):
     """템플릿의 Journal 아래 마음 기록 칸들을 그대로 읽어 화면 양식으로 (템플릿을 고치면 앱도 따라간다)"""
-    lines = open(TEMPLATE, encoding='utf-8').read().split('\n')
+    lines = (text if text is not None else open(TEMPLATE, encoding='utf-8').read()).split('\n')
     start = next((i for i, l in enumerate(lines) if l.startswith('### ') and 'Journal' in l), len(lines))
     out, cur, ask = [], None, []
     for l in lines[start + 1:]:
-        if 'randomQuote' in l:
+        if 'randomQuote' in l or re.match(r'^>\s?\[!quote\]', l):
             break
         if l.strip() == '---':
             out.append({'sep': True})
@@ -331,6 +331,13 @@ def mind_form():
         elif m := re.match(r'^(?:(.+?) :: )?\*\*(.+)\*\*\s*$', l):
             ask.append({'label': m.group(1) or '', 'text': m.group(2)})
     return out
+
+
+def mind_old(body, f):
+    """템플릿에서 빠진 칸에 쓴 답 (그 노트 본문의 양식으로 읽어, 예전 답이 앱에서도 보이게)"""
+    now = {m['name'] for m in mind_form() if 'name' in m}
+    return [m for m in mind_form(body) if 'name' in m and m['name'] not in now
+            and any(f.get(i.get('field')) or f.get(i.get('toggle')) is True for i in m['items'])]
 
 
 # ── 읽기 · 저장 ───────────────────────────────────────────
@@ -356,9 +363,10 @@ def read_day(d):
     lines = body.split('\n')
     q = quote_get(lines) if exists else {'state': 'new'}
     wy, wk = week_key(d)
+    f = yaml.safe_load(fm) or {}
     return {'date': d.isoformat(), 'name': fname(d), 'exists': exists, 'week': wk,
             'mtime': os.path.getmtime(p) if exists else 0,
-            'fm': yaml.safe_load(fm) or {}, 'sec': {k: sec_get(lines, k) for k in SECS},
+            'fm': f, 'sec': {k: sec_get(lines, k) for k in SECS}, 'mind_old': mind_old(body, f),
             'quote': q, 'author': author_get(q['link'], q.get('text', '')) if q.get('link') else None}
 
 
@@ -504,8 +512,8 @@ def sync_once(code):
     mt = {d: os.path.getmtime(path(day(d))) for d in dates}
     mind, quotes = mind_form(), quote_list()
     dh, mh, qh = (hashlib.sha1(json.dumps(x, ensure_ascii=False).encode()).hexdigest() for x in (dates, mind, quotes))
-    if st.get('fmt') != 2:                # 노트 읽는 법이 바뀌었다(예전 명언 형식) → 폰 사본도 한 번 다시 보낸다
-        st.update(up={d: 0 for d in mt} if 'up' in st else dict(mt), fmt=2)
+    if st.get('fmt') != 3:                # 노트 읽는 법이 바뀌었다(mind_old) → 폰 사본도 한 번 다시 보낸다
+        st.update(up={d: 0 for d in mt} if 'up' in st else dict(mt), fmt=3)
     up = st.setdefault('up', dict(mt))    # 처음엔 지금 상태를 기준으로만 (노트 내용은 폰이 '다시 받기'로 가져간다)
     changed = [d for d in dates if up.get(d) != mt[d]][:40]           # 맥에서 바뀐 노트 (한 번에 40개까지)
     put = {d: phone_doc(day(d)) for d in changed}

@@ -188,8 +188,9 @@ textarea:focus, .line:focus { border-color:var(--acc); background:var(--card); }
 .chips { display:flex; flex-wrap:wrap; gap:8px; }
 .chip { height:34px; padding:0 14px; font-size:14px; font-weight:700; border:1px solid var(--line); border-radius:999px; background:var(--card); color:var(--mute); }
 .chip.on { border-color:var(--acc); background:var(--acc); color:#fff; }
-.mood-row { display:flex; align-items:center; gap:12px; }
-.mood-row .lbl { margin:0; }
+.mood-row { display:flex; align-items:center; gap:12px; margin-bottom:8px; }
+.mood-row .lbl { min-width:28px; margin:0; }
+.two { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:8px; }
 .moods { display:flex; gap:6px; }
 .moods button { width:40px; height:32px; padding:0; font-family:var(--num); font-size:15px; font-weight:600; border:1px solid var(--line); border-radius:10px; background:var(--bg); color:var(--mute); }
 .moods button.on { border-color:var(--acc); background:var(--acc); color:#fff; }
@@ -203,6 +204,10 @@ textarea:focus, .line:focus { border-color:var(--acc); background:var(--card); }
 .on > .sw, .sw.on { background:var(--acc); }
 .on > .sw::after, .sw.on::after { transform:translateX(16px); }
 .mbody { padding:0 0 14px; }
+.mhead.fixed { padding-bottom:2px; }
+.laws { padding:0 0 10px; }
+.law { display:flex; gap:10px; width:100%; padding:6px 0; font-size:14px; line-height:1.6; white-space:pre-wrap; word-break:keep-all; border:0; background:none; color:var(--fg); text-align:left; }
+.law b { flex:none; font-family:var(--num); font-weight:600; color:var(--mute); }
 .ask { margin:10px 0 6px; font-size:14px; font-weight:600; line-height:1.5; color:var(--deep); }
 .ask em { display:inline-block; margin-right:6px; padding:0 7px; font-size:12px; font-style:normal; border-radius:6px; background:var(--soft); color:var(--acc); }
 .opt { display:flex; align-items:center; gap:10px; width:100%; padding:6px 0; font-size:14px; border:0; background:none; color:var(--fg); text-align:left; }
@@ -362,7 +367,7 @@ function api(u, body) {
 /* ── 폰: 맥 서버 대신 동기화 서버(Apps Script, sync/Code.js)를 우체통으로 쓴다.
    우체통은 오가는 것만 잠깐 들고, 노트 사본은 폰 안(IndexedDB)에 전부 둔다. 처음 연결하면 맥이 모든 노트를 나눠 보내고,
    그 뒤로는 바뀐 노트만 온다. 고친 칸은 보내 두면 맥이 볼트에 쓴다 ── */
-const APP_VERSION = '26.10.26-1';                                     // 올릴 때마다 version.json · sw.js 와 같이 올린다
+const APP_VERSION = '26.11.02-1';                                     // 올릴 때마다 version.json · sw.js 와 같이 올린다
 const LOCAL = /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
 const PHONE = location.protocol === 'https:' || (LOCAL && location.search.includes('phone'));   // ?phone = 맥에서 폰 화면 시험
 // 맥에서 폰 화면을 시험할 때는 늘 가짜 연동 서버(node sync/test_sync.mjs --serve)로만 — 진짜 노트에 시험 글이 섞이지 않게
@@ -498,6 +503,7 @@ async function load(d) {
   stateText = PHONE ? syncText(d) || (D.exists ? '' : '새 노트') : D.exists ? '' : '새 노트';
   render();
   watchJob();
+  loadWeek();
 }
 function setFm(k, v) { D.fm[k] = v; dirty.fm[k] = v; queue(); }
 function setSec(k, v) { D.sec[k] = v; dirty.sec[k] = v; queue(); }
@@ -613,8 +619,11 @@ const CARDS = {
     return `<section class="card" id="c-study"><h3>공부</h3>${ta('data-sec="study"', D.sec.study, '오늘 공부한 것', 'md')}</section>`;
   },
   'c-close'() {
-    return `<section class="card" id="c-close"><h3>하루 마무리</h3><div class="mood-row"><span class="lbl">기분</span>
-      <div class="moods">${[1, 2, 3, 4, 5].map(n => `<button type="button" data-mood="${n}" class="${D.fm.mood == n ? 'on' : ''}">${n}</button>`).join('')}</div></div>
+    const score = (k, l) => `<div class="mood-row"><span class="lbl">${l}</span>
+      <div class="moods">${[1, 2, 3, 4, 5].map(n => `<button type="button" data-mood="${k}:${n}" class="${D.fm[k] == n ? 'on' : ''}">${n}</button>`).join('')}</div></div>`;
+    return `<section class="card" id="c-close"><h3>하루 마무리</h3>${score('body', '몸')}${score('mood', '마음')}
+      <div class="two"><div><span class="lbl">수면</span>${ta('data-fm="sleep"', D.fm.sleep, '몇 시간', 'oneline')}</div>
+      <div><span class="lbl">술</span>${ta('data-fm="alcohol"', D.fm.alcohol, '없음, 맥주 2캔', 'oneline')}</div></div>
       <span class="lbl">오늘의 한 줄</span>${ta('data-fm="highlight"', D.fm.highlight, '오늘을 한 줄로', 'oneline')}</section>`;
   },
   'c-journal'() {
@@ -622,15 +631,35 @@ const CARDS = {
     return `<section class="card" id="c-journal"><h3>Journal</h3>${ta('data-sec="journal"', D.sec.journal, '오늘 있었던 일', 'md big')}</section>`;
   },
 };
-// 마음 기록: 템플릿의 --- 로 나뉜 묶음마다 카드 하나
-const MIND_TITLE = ['하루 돌아보기', '마음 살피기'];
-const mindGroups = () => D.mind.reduce((g, m) => { if (m.sep) g.push([]); else g[g.length - 1].push(m); return g; }, [[]]).filter(g => g.length);
+// 마음 기록: 템플릿의 --- 로 나뉜 묶음마다 카드 하나. 토글이 없는 칸은 늘 펼쳐 둔다. 템플릿에서 빠진 칸에 쓴 답은 '이전 칸' 카드로 (mind_old)
+const MIND_TITLE = ['하루 돌아보기', '힘든 날에만', '이번 주 모아 보기'], WEEK_GROUP = 2, LAW = '법칙_기록';
+const mindGroups = () => {
+  const g = D.mind.reduce((g, m) => { if (m.sep) g.push([]); else g[g.length - 1].push(m); return g; }, [[]]).filter(g => g.length);
+  return D.mind_old?.length ? [...g, D.mind_old] : g;
+};
+// 이번 주(일~토, 앱의 주 번호와 같다) 노트의 오늘의 법칙. 맥·폰 모두 /api/day 로 읽는다
+let WEEK = { sun: '', list: [] };
+const weekOf = d => shift(d, -new Date(d + 'T12:00').getDay());
+async function loadWeek() {
+  const d = D.date, sun = weekOf(d), days = [...Array(7)].map((_, i) => shift(sun, i));
+  const notes = await Promise.all(days.map(x => x === d ? D : api('/api/day?date=' + x).catch(() => null)));
+  if (D?.date !== d) return;
+  WEEK = { sun, list: notes.filter(Boolean).map(n => ({ date: n.date, text: n.fm?.[LAW] })) };
+  drawLaws();
+}
+function lawsHtml() {
+  const list = weekOf(D.date) === WEEK.sun ? WEEK.list.map(w => w.date === D.date ? { ...w, text: D.fm[LAW] } : w).filter(w => w.text?.trim()) : [];
+  const when = s => `${+s.slice(5, 7)}/${+s.slice(8)}`;
+  return list.map(w => `<button type="button" class="law" data-wkday="${w.date}"><b>${when(w.date)}</b><span>${esc(dash(w.text))}</span></button>`).join('')
+    || '<p class="muted">이번 주 오늘의 법칙이 여기에 모여요</p>';
+}
+function drawLaws() { const el = $('#laws'); if (el) el.innerHTML = lawsHtml(); }
 function mindCard(gi) {
-    const f = D.fm;
-    return `<section class="card" id="c-mind${gi}"><h3>${MIND_TITLE[gi] || '마음 기록'}</h3>${(mindGroups()[gi] || []).map(m => {
-      const open = f[m.check] === true || m.items.some(i => has(f[i.field]) || f[i.toggle] === true);
+    const f = D.fm, g = mindGroups()[gi] || [];
+    return `<section class="card" id="c-mind${gi}"><h3>${g === D.mind_old ? '이전 칸' : MIND_TITLE[gi] || '마음 기록'}</h3>${gi === WEEK_GROUP && g !== D.mind_old ? `<div class="laws" id="laws">${lawsHtml()}</div>` : ''}${g.map(m => {
+      const open = !m.check || f[m.check] === true || m.items.some(i => has(f[i.field]) || f[i.toggle] === true);
       const asks = a => a.map(x => `<p class="ask">${x.label ? `<em>${esc(x.label)}</em>` : ''}${esc(x.text)}</p>`).join('');
-      return `<div class="mind"><button type="button" class="mhead${f[m.check] === true ? ' on' : ''}" data-tog="${esc(m.check)}">#${esc(m.name)}<span class="sw"></span></button>
+      return `<div class="mind">${m.check ? `<button type="button" class="mhead${f[m.check] === true ? ' on' : ''}" data-tog="${esc(m.check)}">#${esc(m.name)}<span class="sw"></span></button>` : `<div class="mhead fixed">#${esc(m.name)}</div>`}
         ${open ? `<div class="mbody">${m.items.map(i => i.toggle
           ? `<button type="button" class="opt${f[i.toggle] === true ? ' on' : ''}" data-tog="${esc(i.toggle)}"><span class="box"></span>${esc(i.label)}</button>`
           : (i.ask ? asks(i.ask) : '') + (i.field ? ta(`data-fm="${esc(i.field)}"`, f[i.field], '') : '')).join('')}</div>` : ''}</div>`;
@@ -709,7 +738,7 @@ document.addEventListener('input', e => {
   }
   if (el.classList.contains('oneline') && el.value.includes('\n')) el.value = el.value.replace(/\s*\n+\s*/g, ' ');
   if (el.tagName === 'TEXTAREA') grow(el);
-  if (el.dataset.fm) setFm(el.dataset.fm, el.value);
+  if (el.dataset.fm) { setFm(el.dataset.fm, el.value); if (el.dataset.fm === LAW) drawLaws(); }
   else if (el.dataset.sec) setSec(el.dataset.sec, el.value);
 });
 document.addEventListener('keydown', e => {
@@ -729,7 +758,8 @@ document.addEventListener('click', e => {
   const b = e.target.closest('button');
   if (!b) return;
   if (b.dataset.tog) { setFm(b.dataset.tog, D.fm[b.dataset.tog] !== true); return draw(b.closest('section').id); }
-  if (b.dataset.mood) { const n = +b.dataset.mood; setFm('mood', D.fm.mood == n ? null : n); return draw('c-close'); }
+  if (b.dataset.mood) { const [k, s] = b.dataset.mood.split(':'), n = +s; setFm(k, D.fm[k] == n ? null : n); return draw('c-close'); }
+  if (b.dataset.wkday) return load(b.dataset.wkday);
   if (b.dataset.box) { const [k, i] = b.dataset.box.split(':'), t = T[k][+i]; t.box = t.box === 'x' ? ' ' : 'x'; t.done = t.box === 'x' ? today() : ''; saveTasks(k); return draw('c-tasks'); }
   if (b.dataset.add) { const k = b.dataset.add; T[k].push({ ind: 0, bullet: true, box: ' ', text: '', done: '' }); return redrawTasks(k, T[k].length - 1, 0); }
   if (b.dataset.open) return api('/api/open', { rel: b.dataset.open }).catch(err => toast(err.message));

@@ -79,12 +79,59 @@ assert S.fav_get(S.split(open(S.MOC).read())[0]) == ['2026-10-13']
 # 마음 기록 양식은 템플릿에서 읽는다
 mind = S.mind_form()
 names = [m['name'] for m in mind if 'name' in m]
-assert names[:2] == ['회고', '음미하기'] and mind[2] == {'sep': True} and names[-1] == '강점체크', names
-cog = next(m for m in mind if m.get('name') == '인지재구성')
+assert names == ['회고', '음미하기', '오늘의발견', '오늘의법칙', '사건체크', '오늘밤', '불편과불행', '주간점검'], names
+assert [i for i, m in enumerate(mind) if m.get('sep')] == [4, 8]        # 묶음: 매일 / 힘든 날 / 주 1회
+assert [m['check'] for m in mind[:4]] == [''] * 4 and mind[5]['check'] == '사건_체크'    # 매일 칸은 토글 없이 늘 펼친다
+assert [i['field'] for i in mind[9]['items']] == ['주간_법칙', '주간_본보기']
+
+# 템플릿에서 빠진 칸: 그 노트 본문의 양식으로 읽고, 쓴 칸만 앱에 보인다
+body = '''### Journal
+어제 일
+
+#### #회고
+`INPUT[toggle:회고_체크]`
+**잘 풀린 일**
+```meta-bind
+INPUT[editor:회고_기록]
+```
+
+---
+
+#### #인지재구성
+`INPUT[toggle:인지재구성_체크]`
+**오늘 그 생각에 왜곡이 섞였는가**
+- `INPUT[toggle:인지왜곡_파국화]` 파국화 (최악)
+- `INPUT[toggle:인지왜곡_흑백사고]` 흑백사고
+```meta-bind
+INPUT[editor:인지재구성_기록]
+```
+
+#### #자기자비
+`INPUT[toggle:자기자비_체크]`
+self-kindness :: **채찍질인가**
+common humanity :: **혼자만은 아닌가**
+```meta-bind
+INPUT[editor:자기자비_기록]
+```
+
+#### #강점체크
+`INPUT[toggle:강점체크_체크]`
+**강점**
+```meta-bind
+INPUT[editor:강점체크_기록]
+```
+
+>[!quote]
+>**명언의 굵은 글씨**
+'''
+old = S.mind_form(body)
+cog = next(m for m in old if m.get('name') == '인지재구성')
 assert cog['check'] == '인지재구성_체크' and cog['items'][0]['ask'][0]['text'].startswith('오늘 그 생각에')
-assert [i['toggle'] for i in cog['items'] if 'toggle' in i][:2] == ['인지왜곡_파국화', '인지왜곡_흑백사고']
-kind = next(m for m in mind if m.get('name') == '자기자비')
-assert [a['label'] for a in kind['items'][0]['ask']] == ['self-kindness', 'common humanity', 'mindfulness']
+assert [i['toggle'] for i in cog['items'] if 'toggle' in i] == ['인지왜곡_파국화', '인지왜곡_흑백사고']
+assert [a['label'] for a in next(m for m in old if m.get('name') == '자기자비')['items'][0]['ask']] == ['self-kindness', 'common humanity']
+got = S.mind_old(body, {'회고_기록': '남는 칸', '인지왜곡_흑백사고': True, '자기자비_기록': '다독임', '자기자비_체크': True, '강점체크_체크': True})
+assert [m['name'] for m in got] == ['인지재구성', '자기자비'], got       # 회고는 지금 칸, 강점체크는 토글만 켠 빈 칸
+assert S.mind_old(body, {}) == [] and S.mind_old(S.render(d, '>[!quote]\n>A\n>— B'), {'발견_기록': 'x'}) == []
 # 폰에서 고친 칸 고르기: 맥이 안 고쳤으면 폰 것, 둘 다 고쳤으면 나중 것, 이상한 키는 버리되 받았다고는 알린다
 cur = {'fm': {'mood': 3, 'highlight': 'a'}, 'sec': {'journal': 'x', 'today': ''}}
 o = {'fm': {'mood': {'v': 4, 't': 1000, 'b': 3}, 'highlight': {'v': 'phone', 't': 1000, 'b': 'old'}, 'date': {'v': 'x', 't': 1, 'b': ''}},
