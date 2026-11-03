@@ -5,11 +5,11 @@ import WebKit
 
 let PORT = 8749
 let HOME_URL = URL(string: "http://127.0.0.1:\(PORT)/")!
-// 프로젝트 폴더: 앱 옆에 server.py 가 없으면(앱만 데스크톱·응용 프로그램으로 옮겨 둔 경우) ~/Desktop/app/daily-note
+// 프로젝트 폴더: 앱 옆에 server.py 가 없으면(앱만 데스크톱·응용 프로그램으로 옮겨 둔 경우) ~/Code/apps/daily-note
 let DIR: URL = {
     let here = Bundle.main.bundleURL.deletingLastPathComponent()
     return FileManager.default.fileExists(atPath: here.appendingPathComponent("server.py").path) ? here
-        : URL(fileURLWithPath: NSHomeDirectory() + "/Desktop/app/daily-note")
+        : URL(fileURLWithPath: NSHomeDirectory() + "/Code/apps/daily-note")
 }()
 let PYTHONS = ["/Library/Frameworks/Python.framework/Versions/3.14/bin/python3", "/usr/local/bin/python3", "/usr/bin/python3"]
 

@@ -17,7 +17,7 @@ import yaml
 
 PORT = 8749
 HERE = os.path.dirname(os.path.abspath(__file__))
-VAULT = os.environ.get('VAULT') or os.path.expanduser('~/Desktop/Obsidian_Dongkyu')
+VAULT = os.environ.get('VAULT') or os.path.expanduser('~/Obsidian_Dongkyu')
 DAILY_REL = '04 Life/Planner/Daily'
 DAILY = os.path.join(VAULT, DAILY_REL)
 TEMPLATE = os.path.join(VAULT, '90 System', 'Templates', 'Daily Note Template.md')

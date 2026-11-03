@@ -26,7 +26,7 @@
   - 폰에서 고친 칸은 받은 편지함에 모였다가 맥이 볼트에 쓴다. 폰에서 단 별은 그 날짜 수정에 `_fav` 키로 실려 와 맥이 명언 모음 노트에 쓴다. 명언 모음 목록은 맥이 바뀔 때마다 우체통 meta(quotes)로 보낸다. 맥이 꺼져 있으면 편지함에 남았다가 맥 서버가 켜질 때 들어간다.
 - 같은 칸을 폰과 맥에서 둘 다 고쳤으면 나중에 고친 쪽이 이긴다 (`server.py` `pick`).
 - 연결 코드는 `sync/Secret.js` (git 제외). 맥 앱 설정 > 폰 연동에 보이고, 폰 앱 설정에 넣는다.
-- 연동 서버 반영: `cd sync && ~/Desktop/app/dosimetrist-calendar-server/tools/node_modules/.bin/clasp push -f && …/clasp redeploy AKfycbwAzbhrtPtjrd8KVQuFTFXfgLmzY4Cgsk-DZlF2ur3b6a7hU_LMQOaKddSt-0O9mOIP -d "설명"`
+- 연동 서버 반영: `cd sync && ~/Code/apps/dosimetrist-calendar-server/tools/node_modules/.bin/clasp push -f && …/clasp redeploy AKfycbwAzbhrtPtjrd8KVQuFTFXfgLmzY4Cgsk-DZlF2ur3b6a7hU_LMQOaKddSt-0O9mOIP -d "설명"`
 - 맥에서 폰 화면 시험: `node sync/test_sync.mjs --serve`(가짜 우체통 8751) + `http://127.0.0.1:8749/?phone`. localhost 의 폰 모드는 늘 가짜 우체통으로만 간다 (진짜 노트에 시험 글이 섞이지 않게).
 
 ## 아이폰 위젯 (오늘·내일 할 일)

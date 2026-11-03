@@ -18,7 +18,7 @@
  * 맥 → {code, op:'mac', put, keep?, done, resync?, dates?, mind?, quotes?} → {ob, want}      quotes = 명언 모음 {list, favs}
  *        resync = {to: 이번 묶음 마지막 날짜, done: 끝인지}, done = [[날짜, 'fm'|'sec', 키, t]]
  *
- * 반영: cd sync && ~/Desktop/app/dosimetrist-calendar-server/tools/node_modules/.bin/clasp push -f
+ * 반영: cd sync && ~/Code/apps/dosimetrist-calendar-server/tools/node_modules/.bin/clasp push -f
  *       && …/clasp redeploy <배포 ID>   (배포 ID 는 server.py·index.html 의 SYNC_URL, URL 유지)
  */
 const CH = 8000, BOX = 300000;                               // 상자 한도 (전체 저장 한도 500KB 중)
