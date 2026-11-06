@@ -185,8 +185,13 @@ textarea:focus, .line:focus { border-color:var(--acc); background:var(--card); }
 .add + h3 { margin-top:14px; }
 
 /* 일정: 날짜가 빠른 것부터 D-day 와 함께 (7일 안은 연하게, 오늘은 진하게, 지난 것은 빨갛게) */
-.plan { display:flex; align-items:center; gap:12px; padding:10px 0; border-top:1px solid var(--line); }
-h3 + .plan, .plan-sec + .plan { border-top:0; padding-top:4px; }
+/* 줄마다 옆으로 밀면(폰 스와이프, 맥 트랙패드 두 손가락) 오른쪽에 삭제 버튼. 놓으면 처음이나 끝으로 붙는다 */
+.plan-sw { display:flex; overflow-x:auto; scroll-snap-type:x mandatory; overscroll-behavior-x:contain; scrollbar-width:none; border-top:1px solid var(--line); }
+.plan-sw::-webkit-scrollbar { display:none; }
+h3 + .plan-sw, .plan-sec + .plan-sw { border-top:0; }
+h3 + .plan-sw .plan, .plan-sec + .plan-sw .plan { padding-top:4px; }
+.plan { flex:0 0 100%; display:flex; align-items:center; gap:12px; padding:10px 0; scroll-snap-align:start; }
+.plan-del { flex:0 0 72px; margin:6px 0 6px 10px; padding:0; font-size:14px; font-weight:700; border:0; border-radius:12px; background:var(--red); color:#fff; scroll-snap-align:end; }
 .plan-sec { margin:12px 0 2px; font-size:12px; font-weight:700; color:var(--mute); }
 h3 + .plan-sec { margin-top:0; }
 .plan .box { margin-top:0; }
@@ -406,7 +411,7 @@ function api(u, body) {
 /* ── 폰: 맥 서버 대신 동기화 서버(Apps Script, sync/Code.js)를 우체통으로 쓴다.
    우체통은 오가는 것만 잠깐 들고, 노트 사본은 폰 안(IndexedDB)에 전부 둔다. 처음 연결하면 맥이 모든 노트를 나눠 보내고,
    그 뒤로는 바뀐 노트만 온다. 고친 칸은 보내 두면 맥이 볼트에 쓴다 ── */
-const APP_VERSION = '26.11.06-4';                                     // 올릴 때마다 version.json · sw.js 와 같이 올린다
+const APP_VERSION = '26.11.06-5';                                     // 올릴 때마다 version.json · sw.js 와 같이 올린다
 const LOCAL = /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
 const PHONE = location.protocol === 'https:' || (LOCAL && location.search.includes('phone'));   // ?phone = 맥에서 폰 화면 시험
 // 맥에서 폰 화면을 시험할 때는 늘 가짜 연동 서버(node sync/test_sync.mjs --serve)로만 — 진짜 노트에 시험 글이 섞이지 않게
@@ -634,7 +639,7 @@ function taskKey(e, el) {
   }
 }
 
-/* ── 일정: 옵시디언 04 Life/Planner/일정.md 의 `- [ ] 날짜 이름` 줄. 체크·추가만 (고치기·지우기는 옵시디언에서)
+/* ── 일정: 옵시디언 04 Life/Planner/일정.md 의 `- [ ] 날짜 이름` 줄. 체크·추가·지우기만 (고치기는 옵시디언에서)
    날짜 없이 `- [ ] 이름 ➕ 넣은 날` 이면 기한 없는 일정 (가능한 빨리). p = {d: 날짜 또는 '', n, x, a: 넣은 날} ── */
 let PL = [], PLW = false, planAdd = false, planDone = false, planDate = '';
 const CAL_SVG = '<rect x="3.5" y="5" width="17" height="15" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/>';
@@ -646,6 +651,7 @@ function planOps(list, ops) {                                         // 바꾸�
     const n = o.n.trim().split(/\s+/).join(' '), hit = L.find(p => p.d === o.d && p.n === n);
     if (o.act === 'add' && n && !hit) L.push({ d: o.d, n, x: false, a: o.d ? '' : o.a || '' });
     else if (o.act === 'toggle' && hit) hit.x = o.on;
+    else if (o.act === 'del' && hit) L.splice(L.indexOf(hit), 1);
   }
   return L;
 }
@@ -703,8 +709,9 @@ const CARDS = {
       const n = days(p.d);
       return `<span class="dday${n === 0 ? ' today' : n < 0 ? ' late' : n <= 7 ? ' near' : ''}">${n === 0 ? 'D-day' : n > 0 ? 'D-' + n : 'D+' + -n}</span>`;
     };
-    const row = p => `<div class="plan${p.x ? ' done' : ''}"><button type="button" class="box" data-plan="${p.i}" aria-label="끝냄 표시"></button>
-        <div class="pt"><span class="pn">${esc(dash(p.n))}</span><span class="pd">${p.d ? planWhen(p.d) : p.a ? planWhen(p.a) + ' 넣음' : '기한 없음'}</span></div>${badge(p)}</div>`;
+    const row = p => `<div class="plan-sw"><div class="plan${p.x ? ' done' : ''}"><button type="button" class="box" data-plan="${p.i}" aria-label="끝냄 표시"></button>
+        <div class="pt"><span class="pn">${esc(dash(p.n))}</span><span class="pd">${p.d ? planWhen(p.d) : p.a ? planWhen(p.a) + ' 넣음' : '기한 없음'}</span></div>${badge(p)}</div>
+        <button type="button" class="plan-del" data-plandel="${p.i}" aria-label="${esc(dash(p.n))} 삭제">삭제</button></div>`;
     return `<section class="card" id="c-plans"><h3>다가오는 일정<span class="r">${soon.length + dated.length ? soon.length + dated.length + '개' : ''}</span></h3>`
       + (soon.length ? `<div class="plan-sec">가능한 빨리</div>${soon.map(row).join('')}${dated.length ? '<div class="plan-sec">날짜 정한 일정</div>' : ''}` : '')
       + (dated.map(row).join('') || (soon.length ? '' : `<p class="muted">${PLW ? '맥에서 일정을 받아 오는 중이에요' : '+ 추가로 일정을 넣으면 D-day 가 보여요'}</p>`))
@@ -884,6 +891,7 @@ document.addEventListener('click', e => {
   if (b.dataset.open) return api('/api/open', { rel: b.dataset.open }).catch(err => toast(err.message));
   if (b.dataset.pickcolor) return setColor(b.dataset.pickcolor);
   if (b.dataset.plan) { const p = PL[+b.dataset.plan]; return planDo([{ act: 'toggle', d: p.d, n: p.n, on: !p.x }]); }
+  if (b.dataset.plandel) { const p = PL[+b.dataset.plandel]; return planDo([{ act: 'del', d: p.d, n: p.n }]); }
   const act = b.dataset.act || b.id;
   if (act === 'planAdd') { planAdd = !planAdd; planDate = D.date; draw('c-plans'); return planAdd && $('#planN').focus(); }
   if (act === 'planCal') return openCal(true, planDate);

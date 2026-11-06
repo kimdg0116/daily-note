@@ -237,7 +237,7 @@ def quote_list():
 
 # ── 일정: 04 Life/Planner/일정.md 의 `- [ ] YYYY-MM-DD 이름` 줄. 앱은 데일리 노트 위 카드에 D-day 와 함께 보인다 ──
 # 날짜 없이 `- [ ] 이름 ➕ 넣은 날` 이면 기한 없는 일정 (가능한 빨리, 넣은 지 며칠째인지 보인다)
-# 다른 줄은 그대로 두고 체크·추가만 한다 (고치기·지우기는 옵시디언에서)
+# 다른 줄은 그대로 두고 체크·추가·지우기(앱에서 옆으로 밀어서)만 한다 (고치기는 옵시디언에서)
 
 PLANS = os.path.join(VAULT, '04 Life', 'Planner', '일정.md')
 PLAN = re.compile(r'^(\s*[-*] \[)([ xX])\] (?:(\d{4}-\d{2}-\d{2})\s+)?(.+?)\s*$')
@@ -278,9 +278,9 @@ def real_date(s):
 
 def plan_ok(o):
     """d 는 날짜 또는 '' (기한 없음), a(넣은 날)는 있으면 날짜"""
-    return isinstance(o, dict) and o.get('act') in ('add', 'toggle') and isinstance(o.get('n'), str) \
+    return isinstance(o, dict) and o.get('act') in ('add', 'toggle', 'del') and isinstance(o.get('n'), str) \
         and (o.get('d') == '' or real_date(str(o.get('d')))) and (not o.get('a') or real_date(str(o['a']))) \
-        and (o['act'] == 'add' or isinstance(o.get('on'), bool))
+        and (o['act'] != 'toggle' or isinstance(o.get('on'), bool))
 
 
 def plan_apply(ops):
@@ -297,6 +297,8 @@ def plan_apply(ops):
                 m = PLAN.match(lines[hit])
                 line = m.group(1) + ('x' if o['on'] else ' ') + lines[hit][m.end(2):]
                 lines[hit] = line if o['on'] else DONE_AT.sub('', line)
+            elif o['act'] == 'del' and hit is not None:           # 그 줄만 (없으면 이미 지운 것)
+                del lines[hit]
         if lines != old:
             os.makedirs(os.path.dirname(PLANS), exist_ok=True)
             write(PLANS, '\n'.join(lines) + '\n')
