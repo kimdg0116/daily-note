@@ -186,7 +186,9 @@ textarea:focus, .line:focus { border-color:var(--acc); background:var(--card); }
 
 /* 일정: 날짜가 빠른 것부터 D-day 와 함께 (7일 안은 연하게, 오늘은 진하게, 지난 것은 빨갛게) */
 .plan { display:flex; align-items:center; gap:12px; padding:10px 0; border-top:1px solid var(--line); }
-.plan:first-of-type { border-top:0; padding-top:4px; }
+h3 + .plan, .plan-sec + .plan { border-top:0; padding-top:4px; }
+.plan-sec { margin:12px 0 2px; font-size:12px; font-weight:700; color:var(--mute); }
+h3 + .plan-sec { margin-top:0; }
 .plan .box { margin-top:0; }
 .pt { flex:1; min-width:0; }
 .pn { display:block; font-size:15px; font-weight:600; line-height:1.4; word-break:keep-all; }
@@ -196,6 +198,11 @@ textarea:focus, .line:focus { border-color:var(--acc); background:var(--card); }
 .dday.near { background:var(--soft); color:var(--acc); }
 .dday.today { background:var(--acc); color:#fff; }
 .dday.late { background:color-mix(in srgb, var(--red) 14%, transparent); color:var(--red); }
+/* 기한 없는 일정: 넣은 지 며칠째. 일주일 안은 연하게, 2주 안은 주황, 그 뒤는 빨갛게 */
+.dday.wait { font-family:var(--font-body); font-size:13px; background:var(--soft); color:var(--acc); }
+.dday.warn { font-family:var(--font-body); font-size:13px; background:color-mix(in srgb, var(--orange) 16%, transparent); color:var(--orange-ink); }
+.cal-foot { display:flex; justify-content:center; margin-top:12px; }
+.cal-foot .pill.on { border-color:var(--acc); background:var(--acc); color:#fff; }
 .plan-foot { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-top:4px; }
 .add.m { font-size:13px; font-weight:600; color:var(--mute); }
 /* 넣는 줄: 날짜 버튼 · 이름 · 넣기 모두 같은 높이 */
@@ -399,7 +406,7 @@ function api(u, body) {
 /* ── 폰: 맥 서버 대신 동기화 서버(Apps Script, sync/Code.js)를 우체통으로 쓴다.
    우체통은 오가는 것만 잠깐 들고, 노트 사본은 폰 안(IndexedDB)에 전부 둔다. 처음 연결하면 맥이 모든 노트를 나눠 보내고,
    그 뒤로는 바뀐 노트만 온다. 고친 칸은 보내 두면 맥이 볼트에 쓴다 ── */
-const APP_VERSION = '26.11.06-3';                                     // 올릴 때마다 version.json · sw.js 와 같이 올린다
+const APP_VERSION = '26.11.06-4';                                     // 올릴 때마다 version.json · sw.js 와 같이 올린다
 const LOCAL = /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
 const PHONE = location.protocol === 'https:' || (LOCAL && location.search.includes('phone'));   // ?phone = 맥에서 폰 화면 시험
 // 맥에서 폰 화면을 시험할 때는 늘 가짜 연동 서버(node sync/test_sync.mjs --serve)로만 — 진짜 노트에 시험 글이 섞이지 않게
@@ -627,15 +634,17 @@ function taskKey(e, el) {
   }
 }
 
-/* ── 일정: 옵시디언 04 Life/Planner/일정.md 의 `- [ ] 날짜 이름` 줄. 체크·추가만 (고치기·지우기는 옵시디언에서) ── */
+/* ── 일정: 옵시디언 04 Life/Planner/일정.md 의 `- [ ] 날짜 이름` 줄. 체크·추가만 (고치기·지우기는 옵시디언에서)
+   날짜 없이 `- [ ] 이름 ➕ 넣은 날` 이면 기한 없는 일정 (가능한 빨리). p = {d: 날짜 또는 '', n, x, a: 넣은 날} ── */
 let PL = [], PLW = false, planAdd = false, planDone = false, planDate = '';
 const CAL_SVG = '<rect x="3.5" y="5" width="17" height="15" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/>';
 const planWhen = s => { const z = new Date(s + 'T12:00'); return (s.slice(0, 4) === D.date.slice(0, 4) ? '' : z.getFullYear() + '년 ') + `${z.getMonth() + 1}월 ${z.getDate()}일 (${WD[z.getDay()]})`; };
+const planBtn = () => planDate ? planWhen(planDate) : '기한 없음';
 function planOps(list, ops) {                                         // 바꾸기를 목록에 (server.py plan_apply 와 같은 규칙)
   const L = list.map(p => ({ ...p }));
   for (const o of ops) {
     const n = o.n.trim().split(/\s+/).join(' '), hit = L.find(p => p.d === o.d && p.n === n);
-    if (o.act === 'add' && n && !hit) L.push({ d: o.d, n, x: false });
+    if (o.act === 'add' && n && !hit) L.push({ d: o.d, n, x: false, a: o.d ? '' : o.a || '' });
     else if (o.act === 'toggle' && hit) hit.x = o.on;
   }
   return L;
@@ -653,7 +662,7 @@ function planDo(ops) {
 function planPut() {
   const n = $('#planN').value.trim(), d = planDate;
   if (!n) { $('#planErr').textContent = '일정 이름을 써 주세요'; return $('#planN').focus(); }
-  planAdd = false; planDo([{ act: 'add', d, n }]);
+  planAdd = false; planDo([{ act: 'add', d, n, a: today() }]);
 }
 
 function grow(el) { el.style.height = 'auto'; el.style.height = el.scrollHeight + 2 + 'px'; }
@@ -681,18 +690,26 @@ const CARDS = {
       ${D.exists ? '' : `<p class="newnote" id="c-new">아직 이 날 노트가 없어요. 쓰기 시작하면 ${PHONE ? '맥이' : ''} 데일리 템플릿 그대로 옵시디언에 만들어${PHONE ? '요' : '져요'}.</p>`}`;
   },
   'c-plans'() {
-    const base = new Date(D.date + 'T12:00'), L = PL.map((p, i) => ({ ...p, i })).sort((a, b) => a.d < b.d ? -1 : a.d > b.d ? 1 : 0);
-    const todo = L.filter(p => !p.x), done = L.filter(p => p.x);
-    const row = p => {
-      const z = new Date(p.d + 'T12:00'), n = Math.round((z - base) / 864e5);
-      return `<div class="plan${p.x ? ' done' : ''}"><button type="button" class="box" data-plan="${p.i}" aria-label="끝냄 표시"></button>
-        <div class="pt"><span class="pn">${esc(dash(p.n))}</span><span class="pd">${planWhen(p.d)}</span></div>
-        ${p.x ? '' : `<span class="dday${n === 0 ? ' today' : n < 0 ? ' late' : n <= 7 ? ' near' : ''}">${n === 0 ? 'D-day' : n > 0 ? 'D-' + n : 'D+' + -n}</span>`}</div>`;
+    const base = new Date(D.date + 'T12:00'), days = s => Math.round((new Date(s + 'T12:00') - base) / 864e5);
+    const cmp = k => (a, b) => a[k] < b[k] ? -1 : a[k] > b[k] ? 1 : 0, L = PL.map((p, i) => ({ ...p, a: p.a || '', i, k: p.a || '~' }));
+    const soon = L.filter(p => !p.x && !p.d).sort(cmp('k')), dated = L.filter(p => !p.x && p.d).sort(cmp('d')), done = L.filter(p => p.x).sort(cmp('d'));
+    const badge = p => {
+      if (p.x) return '';
+      if (!p.d) {                                                     // 기한 없음: 넣은 날이 1일째
+        if (!p.a) return '<span class="dday wait">빨리</span>';
+        const k = Math.max(1, 1 - days(p.a));
+        return `<span class="dday ${k > 14 ? 'late' : k > 7 ? 'warn' : 'wait'}">${k}일째</span>`;
+      }
+      const n = days(p.d);
+      return `<span class="dday${n === 0 ? ' today' : n < 0 ? ' late' : n <= 7 ? ' near' : ''}">${n === 0 ? 'D-day' : n > 0 ? 'D-' + n : 'D+' + -n}</span>`;
     };
-    return `<section class="card" id="c-plans"><h3>다가오는 일정<span class="r">${todo.length ? todo.length + '개' : ''}</span></h3>`
-      + (todo.map(row).join('') || `<p class="muted">${PLW ? '맥에서 일정을 받아 오는 중이에요' : '+ 추가로 일정을 넣으면 D-day 가 보여요'}</p>`)
+    const row = p => `<div class="plan${p.x ? ' done' : ''}"><button type="button" class="box" data-plan="${p.i}" aria-label="끝냄 표시"></button>
+        <div class="pt"><span class="pn">${esc(dash(p.n))}</span><span class="pd">${p.d ? planWhen(p.d) : p.a ? planWhen(p.a) + ' 넣음' : '기한 없음'}</span></div>${badge(p)}</div>`;
+    return `<section class="card" id="c-plans"><h3>다가오는 일정<span class="r">${soon.length + dated.length ? soon.length + dated.length + '개' : ''}</span></h3>`
+      + (soon.length ? `<div class="plan-sec">가능한 빨리</div>${soon.map(row).join('')}${dated.length ? '<div class="plan-sec">날짜 정한 일정</div>' : ''}` : '')
+      + (dated.map(row).join('') || (soon.length ? '' : `<p class="muted">${PLW ? '맥에서 일정을 받아 오는 중이에요' : '+ 추가로 일정을 넣으면 D-day 가 보여요'}</p>`))
       + (planDone ? done.map(row).join('') : '')
-      + (planAdd ? `<div class="plan-add"><button type="button" class="datebtn" id="planDate" data-act="planCal" aria-label="일정 날짜 고르기">${svg(CAL_SVG)}<span>${planWhen(planDate)}</span></button>
+      + (planAdd ? `<div class="plan-add"><button type="button" class="datebtn" id="planDate" data-act="planCal" aria-label="일정 날짜 고르기">${svg(CAL_SVG)}<span>${planBtn()}</span></button>
           <input id="planN" class="line" placeholder="일정 이름" autocomplete="off" spellcheck="false"><button type="button" class="main" data-act="planPut">넣기</button></div><p class="plan-err" id="planErr"></p>` : '')
       + `<div class="plan-foot"><button type="button" class="add" data-act="planAdd">${planAdd ? '닫기' : '+ 추가'}</button>`
       + (done.length ? `<button type="button" class="add m" data-act="planDone">끝낸 일정 ${done.length}개 ${planDone ? '접기' : '보기'}</button>` : '') + '</div></section>';
@@ -903,21 +920,21 @@ function syncHistory() {
   else if (!open && st) history.back();
 }
 addEventListener('popstate', () => { $('#calendar').hidden = true; $('#settings').hidden = true; $('#qpanel').hidden = true; });
-// pick = 일정 날짜 고르기 (그 날짜를 골라 두고, 점은 일정이 있는 날). 없으면 노트 날짜로 가기 (점은 노트가 있는 날)
-let calPick = '';
+// pick = 일정 날짜 고르기 (지금 고른 날짜, '' = 기한 없음. 점은 일정이 있는 날). null 이면 노트 날짜로 가기 (점은 노트가 있는 날)
+let calPick = null;
 async function openCal(on, pick) {
-  calPick = on && pick || '';
+  calPick = on && pick != null ? pick : null;
   $('#calendar').hidden = !on;
   syncHistory();
   if (!on || !D) return;
   calYm = (calPick || D.date).slice(0, 7); drawCal();
-  if (calPick) return;
+  if (calPick !== null) return;
   const r = await api('/api/days').catch(() => null);
   if (r) { DAYS = new Set(r.dates); drawCal(); }
 }
 function drawCal() {
   const [y, m] = calYm.split('-').map(Number), lead = new Date(y, m - 1, 1).getDay(), rows = Math.ceil((lead + new Date(y, m, 0).getDate()) / 7);
-  const sel = calPick || D.date, dots = calPick ? new Set(PL.filter(p => !p.x).map(p => p.d)) : DAYS;
+  const picking = calPick !== null, sel = picking ? calPick : D.date, dots = picking ? new Set(PL.filter(p => !p.x && p.d).map(p => p.d)) : DAYS;
   let cells = WD.map((w, i) => `<span class="wd${i === 0 ? ' sun' : i === 6 ? ' sat' : ''}">${w}</span>`).join('');
   for (let i = 0; i < rows * 7; i++) {
     const d = new Date(y, m - 1, 1 - lead + i), s = ymd(d);
@@ -925,23 +942,23 @@ function drawCal() {
     cells += `<button type="button" data-day="${s}" class="${cls.filter(Boolean).join(' ')}">${d.getDate()}</button>`;
   }
   const n = [...dots].filter(d => d.startsWith(calYm)).length;
-  $('#calBody').innerHTML = `<div class="cal-head"><b>${y}. ${String(m).padStart(2, '0')}</b><span class="muted">${calPick ? '일정 날짜 고르기' + (n ? ` · 일정 ${n}개` : '') : `노트 ${n}개`}</span>
+  $('#calBody').innerHTML = `<div class="cal-head"><b>${y}. ${String(m).padStart(2, '0')}</b><span class="muted">${picking ? '일정 날짜 고르기' + (n ? ` · 일정 ${n}개` : '') : `노트 ${n}개`}</span>
     <button type="button" class="icon-btn" data-calm="-1" aria-label="전달"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 6-6 6 6 6"/></svg></button>
     <button type="button" class="pill" data-calm="0">이번 달</button>
     <button type="button" class="icon-btn" data-calm="1" aria-label="다음 달"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button></div>
-    <div class="cal-grid">${cells}</div>`;
+    <div class="cal-grid">${cells}</div>${picking ? `<div class="cal-foot"><button type="button" class="pill${calPick ? '' : ' on'}" data-nodate="1">기한 없음 · 가능한 빨리</button></div>` : ''}`;
 }
 $('#calendar').addEventListener('click', e => {
   if (e.target.id === 'calendar') return openCal(false);
   const b = e.target.closest('button');
   if (!b) return;
   e.stopPropagation();
-  if (b.dataset.day) {
+  if (b.dataset.day || b.dataset.nodate) {
     const pick = calPick;
     openCal(false);
-    if (!pick) return load(b.dataset.day);
-    planDate = b.dataset.day;                                         // 쓰던 이름은 그대로 두고 날짜 버튼만 바꾼다
-    const s = $('#planDate span'); if (s) s.textContent = planWhen(planDate);
+    if (pick === null) return load(b.dataset.day);
+    planDate = b.dataset.day || '';                                   // 쓰던 이름은 그대로 두고 날짜 버튼만 바꾼다
+    const s = $('#planDate span'); if (s) s.textContent = planBtn();
     $('#planN')?.focus();
   }
   else if (b.dataset.calm) { const [y, m] = calYm.split('-').map(Number), n = +b.dataset.calm; calYm = n ? ymd(new Date(y, m - 1 + n, 1)).slice(0, 7) : today().slice(0, 7); drawCal(); }

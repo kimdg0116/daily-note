@@ -236,19 +236,24 @@ def quote_list():
 
 
 # ── 일정: 04 Life/Planner/일정.md 의 `- [ ] YYYY-MM-DD 이름` 줄. 앱은 데일리 노트 위 카드에 D-day 와 함께 보인다 ──
+# 날짜 없이 `- [ ] 이름 ➕ 넣은 날` 이면 기한 없는 일정 (가능한 빨리, 넣은 지 며칠째인지 보인다)
 # 다른 줄은 그대로 두고 체크·추가만 한다 (고치기·지우기는 옵시디언에서)
 
 PLANS = os.path.join(VAULT, '04 Life', 'Planner', '일정.md')
-PLAN = re.compile(r'^(\s*[-*] \[)([ xX])\] (\d{4}-\d{2}-\d{2})\s+(.+?)\s*$')
+PLAN = re.compile(r'^(\s*[-*] \[)([ xX])\] (?:(\d{4}-\d{2}-\d{2})\s+)?(.+?)\s*$')
 DONE_AT = re.compile(r'\s*✅ \d{4}-\d{2}-\d{2}')     # 옵시디언 Tasks 플러그인이 체크할 때 붙이는 날짜
+ADDED = re.compile(r'\s*➕ (\d{4}-\d{2}-\d{2})')     # 넣은 날 (Tasks 플러그인의 만든 날 표기)
 
 
 def plan_items(lines):
+    """[(줄 번호, {d: 날짜 또는 '' (기한 없음), n: 이름, x: 끝냄, a: 넣은 날 또는 ''})]"""
     out = []
     for i, l in enumerate(lines):
         m = PLAN.match(l)
-        if m:
-            out.append((i, {'d': m.group(3), 'n': ' '.join(DONE_AT.sub('', m.group(4)).split()), 'x': m.group(2) != ' '}))
+        n = m and ' '.join(ADDED.sub('', DONE_AT.sub('', m.group(4))).split())
+        if n:
+            a = ADDED.search(m.group(4))
+            out.append((i, {'d': m.group(3) or '', 'n': n, 'x': m.group(2) != ' ', 'a': a.group(1) if a else ''}))
     return out
 
 
@@ -264,14 +269,18 @@ def plan_list():
     return [p for _, p in plan_items(plan_lines())]
 
 
-def plan_ok(o):
-    if not isinstance(o, dict) or o.get('act') not in ('add', 'toggle') or not isinstance(o.get('n'), str) \
-            or not DATE.match(str(o.get('d', ''))) or (o['act'] == 'toggle' and not isinstance(o.get('on'), bool)):
-        return False
+def real_date(s):
     try:
-        return bool(day(o['d']))
+        return bool(DATE.match(s)) and bool(day(s))
     except ValueError:
         return False
+
+
+def plan_ok(o):
+    """d 는 날짜 또는 '' (기한 없음), a(넣은 날)는 있으면 날짜"""
+    return isinstance(o, dict) and o.get('act') in ('add', 'toggle') and isinstance(o.get('n'), str) \
+        and (o.get('d') == '' or real_date(str(o.get('d')))) and (not o.get('a') or real_date(str(o['a']))) \
+        and (o['act'] == 'add' or isinstance(o.get('on'), bool))
 
 
 def plan_apply(ops):
@@ -282,8 +291,8 @@ def plan_apply(ops):
         for o in filter(plan_ok, ops):
             n = ' '.join(o['n'].split())[:200]
             hit = next((i for i, p in plan_items(lines) if p['d'] == o['d'] and p['n'] == n), None)
-            if o['act'] == 'add' and n and hit is None:
-                lines.append(f'- [ ] {o["d"]} {n}')
+            if o['act'] == 'add' and n and hit is None:          # 넣은 날은 폰에서 넣은 날 (맥이 늦게 받아도)
+                lines.append(f'- [ ] {o["d"]} {n}' if o['d'] else f'- [ ] {n} ➕ {o.get("a") or date.today().isoformat()}')
             elif o['act'] == 'toggle' and hit is not None:
                 m = PLAN.match(lines[hit])
                 line = m.group(1) + ('x' if o['on'] else ' ') + lines[hit][m.end(2):]

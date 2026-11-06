@@ -151,10 +151,16 @@ S.PLANS = os.path.join(tempfile.mkdtemp(), 'Planner', '일정.md')
 assert S.plan_list() == []
 assert S.plan_apply([{'act': 'add', 'd': '2026-12-05', 'n': ' 토플  시험 '}, {'act': 'add', 'd': '2026-12-05', 'n': '토플 시험'},
                      {'act': 'add', 'd': '2026-02-30', 'n': 'x'}, {'act': 'add', 'd': '2026-12-06', 'n': '  '},
-                     {'act': 'toggle', 'd': '2026-12-05', 'n': '토플 시험'}]) == [{'d': '2026-12-05', 'n': '토플 시험', 'x': False}]
-open(S.PLANS, 'a').write('메모 줄\n- [x] 2026-11-01 여권 사진 ✅ 2026-11-01\n\n')
+                     {'act': 'toggle', 'd': '2026-12-05', 'n': '토플 시험'}, {'act': 'add', 'n': '날짜 키 없음'},
+                     {'act': 'add', 'd': '', 'n': '넣은 날 이상', 'a': 'x'}]) == [{'d': '2026-12-05', 'n': '토플 시험', 'x': False, 'a': ''}]
+open(S.PLANS, 'a').write('메모 줄\n- [x] 2026-11-01 여권 사진 ✅ 2026-11-01\n- [ ] \n\n')
 S.plan_apply([{'act': 'toggle', 'd': '2026-12-05', 'n': '토플 시험', 'on': True}, {'act': 'toggle', 'd': '2026-11-01', 'n': '여권 사진', 'on': False},
               {'act': 'add', 'd': '2026-11-20', 'n': '건강검진'}])
-assert open(S.PLANS).read() == '- [x] 2026-12-05 토플 시험\n메모 줄\n- [ ] 2026-11-01 여권 사진\n- [ ] 2026-11-20 건강검진\n'
+assert open(S.PLANS).read() == '- [x] 2026-12-05 토플 시험\n메모 줄\n- [ ] 2026-11-01 여권 사진\n- [ ] \n- [ ] 2026-11-20 건강검진\n'
 assert [p['x'] for p in S.plan_list()] == [True, False, False]
+# 기한 없는 일정: 날짜 없이 '이름 ➕ 넣은 날'. 같은 이름은 한 번만, 체크해도 넣은 날은 남는다
+L = S.plan_apply([{'act': 'add', 'd': '', 'n': '여권 재발급', 'a': '2026-11-02'}, {'act': 'add', 'd': '', 'n': '여권 재발급', 'a': '2026-11-03'},
+                  {'act': 'toggle', 'd': '', 'n': '여권 재발급', 'on': True}])
+assert open(S.PLANS).read().endswith('- [x] 여권 재발급 ➕ 2026-11-02\n') and L[-1] == {'d': '', 'n': '여권 재발급', 'x': True, 'a': '2026-11-02'}, L
+assert S.plan_items(['- [ ] 은행 ➕ 2026-10-01 ✅ 2026-10-05', '- [ ] 그냥 할 일'])[1][1] == {'d': '', 'n': '그냥 할 일', 'x': False, 'a': ''}
 print('ok')
