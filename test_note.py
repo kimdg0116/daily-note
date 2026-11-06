@@ -142,4 +142,16 @@ o = {'fm': {'mood': {'v': 4, 't': 1000, 'b': 3}, 'highlight': {'v': 'phone', 't'
 fmc, secc, done = S.pick(cur, 3000, o)
 assert fmc == {'mood': 4} and secc == {'journal': 'y'} and len(done) == 6, (fmc, secc, done)
 assert S.sec_set(['### <font>Journal</font>', '- a', '', '#### #회고'], 'journal', '') == ['### <font>Journal</font>', '', '#### #회고']
+
+# 일정 노트: 다른 줄은 그대로, 체크·추가만. 같은 추가가 두 번 와도(폰 연동) 한 줄, 이상한 것은 버린다
+S.PLANS = os.path.join(tempfile.mkdtemp(), 'Planner', '일정.md')
+assert S.plan_list() == []
+assert S.plan_apply([{'act': 'add', 'd': '2026-12-05', 'n': ' 토플  시험 '}, {'act': 'add', 'd': '2026-12-05', 'n': '토플 시험'},
+                     {'act': 'add', 'd': '2026-02-30', 'n': 'x'}, {'act': 'add', 'd': '2026-12-06', 'n': '  '},
+                     {'act': 'toggle', 'd': '2026-12-05', 'n': '토플 시험'}]) == [{'d': '2026-12-05', 'n': '토플 시험', 'x': False}]
+open(S.PLANS, 'a').write('메모 줄\n- [x] 2026-11-01 여권 사진 ✅ 2026-11-01\n\n')
+S.plan_apply([{'act': 'toggle', 'd': '2026-12-05', 'n': '토플 시험', 'on': True}, {'act': 'toggle', 'd': '2026-11-01', 'n': '여권 사진', 'on': False},
+              {'act': 'add', 'd': '2026-11-20', 'n': '건강검진'}])
+assert open(S.PLANS).read() == '- [x] 2026-12-05 토플 시험\n메모 줄\n- [ ] 2026-11-01 여권 사진\n- [ ] 2026-11-20 건강검진\n'
+assert [p['x'] for p in S.plan_list()] == [True, False, False]
 print('ok')

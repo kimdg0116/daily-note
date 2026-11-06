@@ -178,11 +178,30 @@ textarea:focus, .line:focus { border-color:var(--acc); background:var(--card); }
 .task.done textarea { color:var(--mute); text-decoration:line-through; }
 .task .dot, .task .when { line-height:22px; margin-top:5px; }
 .box { flex:none; width:20px; height:20px; margin-top:6px; padding:0; border:2px solid var(--line); border-radius:6px; background:var(--card); }
-.task.done .box { border-color:var(--acc); background:var(--acc) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m5 12.5 4.5 4.5L19 7.5'/%3E%3C/svg%3E") center/14px no-repeat; }
+.task.done .box, .plan.done .box { border-color:var(--acc); background:var(--acc) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m5 12.5 4.5 4.5L19 7.5'/%3E%3C/svg%3E") center/14px no-repeat; }
 .dot { flex:none; width:20px; text-align:center; color:var(--mute); }
 .when { flex:none; font-size:12px; color:var(--mute); }
 .add { padding:6px 0; font-size:14px; font-weight:700; border:0; background:none; color:var(--acc); }
 .add + h3 { margin-top:14px; }
+
+/* 일정: 날짜가 빠른 것부터 D-day 와 함께 (7일 안은 연하게, 오늘은 진하게, 지난 것은 빨갛게) */
+.plan { display:flex; align-items:center; gap:10px; padding:9px 0; border-top:1px solid var(--line); }
+.plan .box { margin-top:0; }
+.pt { flex:1; min-width:0; }
+.pn { display:block; font-size:15px; line-height:1.35; word-break:keep-all; }
+.plan.done .pn { color:var(--mute); text-decoration:line-through; }
+.pd { display:block; font-size:12px; color:var(--mute); }
+.pd .n, .dday { font-family:var(--num); }
+.dday { flex:none; min-width:56px; padding:3px 9px; text-align:center; font-size:14px; font-weight:600; border-radius:999px; background:var(--bg); color:var(--mute); }
+.dday.near { background:var(--soft); color:var(--acc); }
+.dday.today { background:var(--acc); color:#fff; }
+.dday.late { background:color-mix(in srgb, var(--red) 14%, transparent); color:var(--red); }
+.add.m { font-size:13px; font-weight:600; color:var(--mute); }
+.plan-add { display:flex; gap:6px; margin-top:10px; }
+.plan-add .line { min-width:0; padding:7px 10px; font-size:14px; }
+.plan-add input[type="date"] { flex:none; width:auto; }
+.plan-err { margin:4px 0 0; font-size:13px; color:var(--red); }
+.plan-err:empty { display:none; }
 
 /* 토글 칩 · 기분 */
 .chips { display:flex; flex-wrap:wrap; gap:8px; }
@@ -367,17 +386,18 @@ function api(u, body) {
 /* ── 폰: 맥 서버 대신 동기화 서버(Apps Script, sync/Code.js)를 우체통으로 쓴다.
    우체통은 오가는 것만 잠깐 들고, 노트 사본은 폰 안(IndexedDB)에 전부 둔다. 처음 연결하면 맥이 모든 노트를 나눠 보내고,
    그 뒤로는 바뀐 노트만 온다. 고친 칸은 보내 두면 맥이 볼트에 쓴다 ── */
-const APP_VERSION = '26.11.02-1';                                     // 올릴 때마다 version.json · sw.js 와 같이 올린다
+const APP_VERSION = '26.11.06-1';                                     // 올릴 때마다 version.json · sw.js 와 같이 올린다
 const LOCAL = /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
 const PHONE = location.protocol === 'https:' || (LOCAL && location.search.includes('phone'));   // ?phone = 맥에서 폰 화면 시험
 // 맥에서 폰 화면을 시험할 때는 늘 가짜 연동 서버(node sync/test_sync.mjs --serve)로만 — 진짜 노트에 시험 글이 섞이지 않게
 const SYNC_URL = LOCAL ? 'http://127.0.0.1:8751/' : 'https://script.google.com/macros/s/AKfycbwAzbhrtPtjrd8KVQuFTFXfgLmzY4Cgsk-DZlF2ur3b6a7hU_LMQOaKddSt-0O9mOIP/exec';
 if (PHONE) document.documentElement.classList.add('phone');
 // SY = 연결 상태(작은 것, localStorage), DOCS = 노트 사본 전부(IndexedDB, 기한·용량 걱정 없음), OUT = 아직 못 보낸 폰 수정
-let SY = {}, OUT = {}, DOCS = {};
-try { SY = JSON.parse(localStorage.getItem('dn.sync')) || {}; OUT = JSON.parse(localStorage.getItem('dn.out')) || {}; } catch (e) {}
+// PO = 폰에서 바꾼 일정 (보냈어도 맥이 일정 노트에 쓸 때까지 화면에 얹는다)
+let SY = {}, OUT = {}, DOCS = {}, PO = [];
+try { SY = JSON.parse(localStorage.getItem('dn.sync')) || {}; OUT = JSON.parse(localStorage.getItem('dn.out')) || {}; PO = JSON.parse(localStorage.getItem('dn.plan')) || []; } catch (e) {}
 delete SY.docs; delete SY.seen;                                       // 예전(localStorage 에 노트 보관) 흔적
-function keepSY() { try { localStorage.setItem('dn.sync', JSON.stringify(SY)); localStorage.setItem('dn.out', JSON.stringify(OUT)); } catch (e) {} }
+function keepSY() { try { localStorage.setItem('dn.sync', JSON.stringify(SY)); localStorage.setItem('dn.out', JSON.stringify(OUT)); localStorage.setItem('dn.plan', JSON.stringify(PO)); } catch (e) {} }
 const idb = new Promise(ok => {                                       // 폰 안 노트 보관함
   if (!PHONE || !window.indexedDB) return ok(null);
   const q = indexedDB.open('daily-note', 1);
@@ -439,6 +459,12 @@ function syncPhone() {
       if (JSON.stringify(OUT[d]) === sent) delete OUT[d];            // 보내는 사이 또 고쳤으면 남겨 두고 다음에
       keepSY();
     }
+    const ops = PO.filter(o => !o.sent);                              // 폰에서 바꾼 일정 보내기
+    if (ops.length) {
+      const r = await post({ op: 'plan', ops: ops.map(({ sent, ...o }) => o) });
+      if (r.err && r.err !== 'bad') throw new Error(r.err);
+      if (!r.err) { ops.forEach(o => { o.sent = true; }); keepSY(); }      // bad = 일정을 모르는 옛 우체통 → 폰에 두고 다음에 (다른 연동은 그대로)
+    }
     if (!SY.full && !SY.asked) { await post({ op: 'want' }); SY.asked = true; SY.rev = 0; keepSY(); }   // 처음엔 맥에 노트 전부를 달라고
     const r = await post({ op: 'get', since: SY.rev || 0, meta: !SY.quotes });   // 2) 맥에서 바뀐 노트 받기 (명언 모음을 놓쳤으면 다시 달라고)
     if (r.err) throw new Error(r.err);
@@ -447,6 +473,8 @@ function syncPhone() {
     if (r.dates) SY.dates = r.dates;
     if (r.mind) SY.mind = r.mind;
     if (r.quotes) SY.quotes = r.quotes;
+    if (r.plans) SY.plans = r.plans;
+    PO = PO.filter(o => !o.sent || (r.pwait || []).includes(o.id));   // 우체통에서 빠졌다 = 맥이 일정 노트에 썼다 (같은 응답의 plans 에 들어 있다)
     for (const d in DOCS) if (DOCS[d].fm && FAV in DOCS[d].fm && !r.wait?.[d] && !OUT[d]) { delete DOCS[d].fm[FAV]; saveDocs({ [d]: DOCS[d] }); }   // 맥이 명언 모음에 썼다
     if (SY.asked && !r.want) Object.assign(SY, { full: true, asked: false });
     Object.assign(SY, { receiving: !!r.want, wait: r.wait, macAt: r.macAt, rev: r.rev, at: Date.now(), err: '' });
@@ -463,6 +491,7 @@ async function phoneRefresh(r) {                                      // 받은 
   else if (!pending() && !saving) state(syncText(D.date));
   if (!$('#settings').hidden) drawSync();
   if (!$('#qpanel').hidden) loadQuotes();
+  loadPlans();
 }
 if (PHONE) api = async (u, body) => {
   const [p, qs] = u.split('?');
@@ -478,6 +507,13 @@ if (PHONE) api = async (u, body) => {
       favs: SY.quotes.list.map(q => q.date).filter(d => f(d, FAV) ?? SY.quotes.favs.includes(d)) };
   }
   if (p === '/api/fav') return phoneSave({ date: body.date, fm: { [FAV]: body.on } });
+  if (p === '/api/plans') {                                           // 맥이 보낸 일정 + 폰에서 바꾼 것
+    if (body) {
+      PO.push(...body.ops.map(o => ({ ...o, id: Date.now().toString(36) + Math.random().toString(36).slice(2, 7) })));
+      keepSY(); clearTimeout(pushT); pushT = setTimeout(() => syncPhone().then(phoneRefresh, () => {}), 1200);
+    }
+    return { list: planOps(SY.plans || [], PO), wait: !SY.plans && !!SY.code };
+  }
   if (p === '/api/open') { location.href = `obsidian://open?vault=${encodeURIComponent(vaultName())}&file=${encodeURIComponent(body.rel)}`; return { ok: true }; }
   throw new Error('명언 정리는 맥에서 해요');
 };
@@ -578,6 +614,33 @@ function taskKey(e, el) {
   }
 }
 
+/* ── 일정: 옵시디언 04 Life/Planner/일정.md 의 `- [ ] 날짜 이름` 줄. 체크·추가만 (고치기·지우기는 옵시디언에서) ── */
+let PL = [], PLW = false, planAdd = false, planDone = false;
+function planOps(list, ops) {                                         // 바꾸기를 목록에 (server.py plan_apply 와 같은 규칙)
+  const L = list.map(p => ({ ...p }));
+  for (const o of ops) {
+    const n = o.n.trim().split(/\s+/).join(' '), hit = L.find(p => p.d === o.d && p.n === n);
+    if (o.act === 'add' && n && !hit) L.push({ d: o.d, n, x: false });
+    else if (o.act === 'toggle' && hit) hit.x = o.on;
+  }
+  return L;
+}
+async function loadPlans() {
+  const r = await api('/api/plans').catch(() => null);
+  if (!r) return;
+  PL = r.list; PLW = r.wait;
+  if (D && !document.activeElement?.closest?.('#c-plans')) draw('c-plans');     // 일정을 쓰는 중이면 다음에
+}
+function planDo(ops) {
+  PL = planOps(PL, ops); draw('c-plans');
+  api('/api/plans', { ops }).then(r => { PL = r.list; draw('c-plans'); }, e => { toast('일정을 저장하지 못했어요 · ' + e.message); loadPlans(); });
+}
+function planPut() {
+  const n = $('#planN').value.trim(), d = $('#planD').value;
+  if (!n || !/^\d{4}-\d{2}-\d{2}$/.test(d)) { $('#planErr').textContent = n ? '날짜를 골라 주세요' : '일정 이름을 써 주세요'; return $('#planN').focus(); }
+  planAdd = false; planDo([{ act: 'add', d, n }]);
+}
+
 function grow(el) { el.style.height = 'auto'; el.style.height = el.scrollHeight + 2 + 'px'; }
 
 /* ── 화면 ── */
@@ -601,6 +664,22 @@ const CARDS = {
     return `<section class="card hero" id="c-hero"><div><div class="big">${d.getMonth() + 1}.${String(d.getDate()).padStart(2, '0')}</div></div>
       <div class="sub"><b>${WD[d.getDay()]}요일</b><span class="yr"> · ${d.getFullYear()}</span> · ${D.week}주</div><span class="state">${esc(stateText || (D.exists ? '노트 있음' : '새 노트'))}</span></section>
       ${D.exists ? '' : `<p class="newnote" id="c-new">아직 이 날 노트가 없어요. 쓰기 시작하면 ${PHONE ? '맥이' : ''} 데일리 템플릿 그대로 옵시디언에 만들어${PHONE ? '요' : '져요'}.</p>`}`;
+  },
+  'c-plans'() {
+    const base = new Date(D.date + 'T12:00'), L = PL.map((p, i) => ({ ...p, i })).sort((a, b) => a.d < b.d ? -1 : a.d > b.d ? 1 : 0);
+    const todo = L.filter(p => !p.x), done = L.filter(p => p.x);
+    const row = p => {
+      const z = new Date(p.d + 'T12:00'), n = Math.round((z - base) / 864e5);
+      return `<div class="plan${p.x ? ' done' : ''}"><button type="button" class="box" data-plan="${p.i}" aria-label="끝냄 표시"></button>
+        <div class="pt"><span class="pn">${esc(dash(p.n))}</span><span class="pd"><span class="n">${z.getFullYear() === base.getFullYear() ? '' : z.getFullYear() + '. '}${z.getMonth() + 1}.${String(z.getDate()).padStart(2, '0')}</span> (${WD[z.getDay()]})</span></div>
+        ${p.x ? '' : `<span class="dday${n === 0 ? ' today' : n < 0 ? ' late' : n <= 7 ? ' near' : ''}">${n === 0 ? 'D-day' : n > 0 ? 'D-' + n : 'D+' + -n}</span>`}</div>`;
+    };
+    return `<section class="card" id="c-plans"><h3>다가오는 일정<span class="r">${todo.length ? todo.length + '개' : ''}</span></h3>`
+      + (todo.map(row).join('') || `<p class="muted">${PLW ? '맥에서 일정을 받아 오는 중이에요' : '+ 추가로 일정을 넣으면 D-day 가 보여요'}</p>`)
+      + (done.length ? `<div><button type="button" class="add m" data-act="planDone">끝낸 일정 ${done.length}개 ${planDone ? '접기' : '보기'}</button></div>${planDone ? done.map(row).join('') : ''}` : '')
+      + (planAdd ? `<div class="plan-add"><input type="date" id="planD" class="line" value="${D.date}"><input id="planN" class="line" placeholder="일정 이름" autocomplete="off" spellcheck="false">
+          <button type="button" class="pill" data-act="planPut">넣기</button></div><p class="plan-err" id="planErr"></p>`
+        : '<button type="button" class="add" data-act="planAdd">+ 추가</button>') + '</section>';
   },
   'c-tasks'() {
     return `<section class="card" id="c-tasks"><h3>오늘 할 일</h3>${taskRows('today')}<h3>내일 할 일</h3>${taskRows('tomorrow')}</section>`;
@@ -690,7 +769,7 @@ Object.assign(CARDS, {
 const cardHtml = id => id.startsWith('c-mind') ? mindCard(+id.slice(6)) : CARDS[id]();
 function render() {
   const y = scrollY;
-  const ids = ['c-hero', 'c-tasks', 'c-work', 'c-study', 'c-close', 'c-journal', ...mindGroups().map((_, i) => 'c-mind' + i), 'c-quote'];
+  const ids = ['c-hero', 'c-plans', 'c-tasks', 'c-work', 'c-study', 'c-close', 'c-journal', ...mindGroups().map((_, i) => 'c-mind' + i), 'c-quote'];
   drop($('#view'));
   $('#view').innerHTML = ids.map(cardHtml).join('');
   document.querySelectorAll('#view textarea').forEach(grow);
@@ -730,6 +809,7 @@ async function refreshQuote() {
 /* ── 입력 ── */
 document.addEventListener('input', e => {
   const el = e.target;
+  if (el.id === 'planN') return void ($('#planErr').textContent = '');
   if (el.dataset.task) {
     const [k, i] = el.dataset.task.split(':'), n = el.value.indexOf('\n');
     T[k][+i].text = el.value.replace(/\n/g, '');
@@ -748,6 +828,8 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Escape' && !$('#calendar').hidden) return openCal(false);
   if (e.key === 'Escape' && !$('#settings').hidden) return openSettings(false);
   if (e.key === 'Escape' && !$('#qpanel').hidden) return openQuotes(false);
+  if (el.id === 'planN' && e.key === 'Enter' && !e.isComposing && e.keyCode !== 229) { e.preventDefault(); return planPut(); }
+  if (el.closest?.('.plan-add') && e.key === 'Escape') { planAdd = false; return draw('c-plans'); }
   if (!e.metaKey || !D) return;
   if (e.key === '[') { e.preventDefault(); load(shift(D.date, -1)); }
   else if (e.key === ']') { e.preventDefault(); load(shift(D.date, 1)); }
@@ -764,7 +846,11 @@ document.addEventListener('click', e => {
   if (b.dataset.add) { const k = b.dataset.add; T[k].push({ ind: 0, bullet: true, box: ' ', text: '', done: '' }); return redrawTasks(k, T[k].length - 1, 0); }
   if (b.dataset.open) return api('/api/open', { rel: b.dataset.open }).catch(err => toast(err.message));
   if (b.dataset.pickcolor) return setColor(b.dataset.pickcolor);
+  if (b.dataset.plan) { const p = PL[+b.dataset.plan]; return planDo([{ act: 'toggle', d: p.d, n: p.n, on: !p.x }]); }
   const act = b.dataset.act || b.id;
+  if (act === 'planAdd') { planAdd = true; draw('c-plans'); return $('#planN').focus(); }
+  if (act === 'planDone') { planDone = !planDone; return draw('c-plans'); }
+  if (act === 'planPut') return planPut();
   if (act === 'prev') load(shift(D.date, -1));
   else if (act === 'next') load(shift(D.date, 1));
   else if (act === 'today') load(today());
@@ -862,6 +948,7 @@ $('#qpanel').addEventListener('click', e => {
 $('#vaultName').addEventListener('change', e => { try { localStorage.setItem('dn.vault', e.target.value.trim()); } catch (x) {} toast('볼트 이름을 바꿨어요'); });
 // 옵시디언에서 고치고 돌아오면 새로 읽는다 (쓰는 중이 아닐 때만)
 addEventListener('focus', async () => {
+  loadPlans();
   if (!D || pending() || saving) return;
   const n = await api('/api/day?date=' + D.date).catch(() => null);
   if (n && n.date === D.date && n.mtime !== D.mtime && !pending()) { D = n; T = { today: parseTasks(D.sec.today), tomorrow: parseTasks(D.sec.tomorrow) }; render(); }
@@ -944,6 +1031,7 @@ async function drawSync() {
 setTheme(theme); setColor(color);
 $('#ver').textContent = 'v' + APP_VERSION;
 load(today());
+loadPlans();
 if (PHONE) {
   const pull = () => syncPhone().then(phoneRefresh, () => { if (D && !pending() && !saving) state(syncText(D.date)); });
   setInterval(() => {                                                 // 30초마다, 노트를 받는 동안은 3초마다

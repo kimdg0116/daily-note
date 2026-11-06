@@ -78,6 +78,15 @@ assert.deepEqual(call({ op: 'widget', today: C, yday: B }), { today: { today: ''
 assert.deepEqual(call({ op: 'widget', today: '2030-01-01', yday: 'bad' }), { today: null, yday: null });
 assert.equal(JSON.stringify(store), before);
 call({ op: 'mac', done: [[C, 'sec', 'tomorrow', 3000]] });
+// 일정: 폰이 바꾼 것은 맥이 가져가 노트에 쓰고 pdone 으로 알리면 지워진다 (같은 id 는 한 번만). 일정 목록은 바뀔 때만 폰에
+const rev3 = call({ op: 'get', since: 0 }).rev, op1 = { id: 'a1', act: 'add', d: C, n: '시험' };
+call({ op: 'plan', ops: [op1] }); call({ op: 'plan', ops: [op1, { act: 'add', d: C, n: 'id 없음' }] });
+assert.deepEqual(call({ op: 'get', since: rev3 }).pwait, ['a1']);
+assert.deepEqual(call({ op: 'mac' }).po, [op1]);
+const PL = [{ d: C, n: '시험', x: false }];
+assert.deepEqual(call({ op: 'mac', pdone: ['a1'], plans: PL }).po, []);
+r = call({ op: 'get', since: rev3 });
+assert.deepEqual(r.plans, PL); assert.deepEqual(r.pwait, []); assert.equal(call({ op: 'get', since: r.rev }).plans, undefined);
 // 상자가 넘치면 오래된 것부터 버리고, 그보다 오래 안 들른 폰은 처음부터 다시 받는다
 const stale = call({ op: 'get', since: 0 }).rev;
 for (let i = 0; i < 6; i++) call({ op: 'mac', put: { [`2026-09-0${i + 1}`]: doc(`2026-09-0${i + 1}`, 1, randomBytes(60000).toString('base64')) } });

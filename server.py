@@ -235,6 +235,65 @@ def quote_list():
     return {'list': out, 'favs': fav_get(split(moc)[0])}
 
 
+# ── 일정: 04 Life/Planner/일정.md 의 `- [ ] YYYY-MM-DD 이름` 줄. 앱은 데일리 노트 위 카드에 D-day 와 함께 보인다 ──
+# 다른 줄은 그대로 두고 체크·추가만 한다 (고치기·지우기는 옵시디언에서)
+
+PLANS = os.path.join(VAULT, '04 Life', 'Planner', '일정.md')
+PLAN = re.compile(r'^(\s*[-*] \[)([ xX])\] (\d{4}-\d{2}-\d{2})\s+(.+?)\s*$')
+DONE_AT = re.compile(r'\s*✅ \d{4}-\d{2}-\d{2}')     # 옵시디언 Tasks 플러그인이 체크할 때 붙이는 날짜
+
+
+def plan_items(lines):
+    out = []
+    for i, l in enumerate(lines):
+        m = PLAN.match(l)
+        if m:
+            out.append((i, {'d': m.group(3), 'n': ' '.join(DONE_AT.sub('', m.group(4)).split()), 'x': m.group(2) != ' '}))
+    return out
+
+
+def plan_lines():
+    try:
+        text = open(PLANS, encoding='utf-8').read().rstrip('\n')
+    except OSError:
+        return []
+    return text.split('\n') if text else []
+
+
+def plan_list():
+    return [p for _, p in plan_items(plan_lines())]
+
+
+def plan_ok(o):
+    if not isinstance(o, dict) or o.get('act') not in ('add', 'toggle') or not isinstance(o.get('n'), str) \
+            or not DATE.match(str(o.get('d', ''))) or (o['act'] == 'toggle' and not isinstance(o.get('on'), bool)):
+        return False
+    try:
+        return bool(day(o['d']))
+    except ValueError:
+        return False
+
+
+def plan_apply(ops):
+    """폰·맥에서 온 일정 바꾸기를 노트에 (같은 날짜·이름이 이미 있으면 추가는 건너뛴다 → 두 번 와도 한 번만)"""
+    with FILE_LOCK:
+        lines = plan_lines()
+        old = list(lines)
+        for o in filter(plan_ok, ops):
+            n = ' '.join(o['n'].split())[:200]
+            hit = next((i for i, p in plan_items(lines) if p['d'] == o['d'] and p['n'] == n), None)
+            if o['act'] == 'add' and n and hit is None:
+                lines.append(f'- [ ] {o["d"]} {n}')
+            elif o['act'] == 'toggle' and hit is not None:
+                m = PLAN.match(lines[hit])
+                line = m.group(1) + ('x' if o['on'] else ' ') + lines[hit][m.end(2):]
+                lines[hit] = line if o['on'] else DONE_AT.sub('', line)
+        if lines != old:
+            os.makedirs(os.path.dirname(PLANS), exist_ok=True)
+            write(PLANS, '\n'.join(lines) + '\n')
+        return [p for _, p in plan_items(lines)]
+
+
 def fetch_quote():
     try:
         r = urllib.request.Request('https://zenquotes.io/api/random', headers={'User-Agent': 'Mozilla/5.0'})
@@ -510,14 +569,14 @@ def sync_once(code):
     st = load_json(SYNC_STATE, {})
     dates = note_dates()
     mt = {d: os.path.getmtime(path(day(d))) for d in dates}
-    mind, quotes = mind_form(), quote_list()
-    dh, mh, qh = (hashlib.sha1(json.dumps(x, ensure_ascii=False).encode()).hexdigest() for x in (dates, mind, quotes))
+    mind, quotes, plans = mind_form(), quote_list(), plan_list()
+    dh, mh, qh, ph = (hashlib.sha1(json.dumps(x, ensure_ascii=False).encode()).hexdigest() for x in (dates, mind, quotes, plans))
     if st.get('fmt') != 3:                # 노트 읽는 법이 바뀌었다(mind_old) → 폰 사본도 한 번 다시 보낸다
         st.update(up={d: 0 for d in mt} if 'up' in st else dict(mt), fmt=3)
     up = st.setdefault('up', dict(mt))    # 처음엔 지금 상태를 기준으로만 (노트 내용은 폰이 '다시 받기'로 가져간다)
     changed = [d for d in dates if up.get(d) != mt[d]][:40]           # 맥에서 바뀐 노트 (한 번에 40개까지)
     put = {d: phone_doc(day(d)) for d in changed}
-    body = {'code': code, 'op': 'mac', 'done': st.get('done', []), 'put': put}
+    body = {'code': code, 'op': 'mac', 'done': st.get('done', []), 'pdone': st.get('pdone', []), 'put': put}
     want = st.get('want')
     if want and not want.get('done') and want.get('seen', 0) >= want.get('sent', 0):   # 폰이 앞 묶음을 받았으면 다음 묶음
         rest, batch, size = [d for d in dates if d > want.get('from', '')], [], 0
@@ -534,11 +593,17 @@ def sync_once(code):
         body['mind'] = mind
     if st.get('qh') != qh:
         body['quotes'] = quotes
+    if st.get('ph') != ph:
+        body['plans'] = plans
     r = sync_post(body)
     if r.get('err'):
         raise RuntimeError('연결 코드가 맞지 않아요' if r['err'] == 'code' else r['err'])
     up.update({d: mt[d] for d in put})
-    st.update(done=[], dh=dh, mh=mh, qh=qh, want=r.get('want'))
+    st.update(done=[], pdone=[], dh=dh, mh=mh, qh=qh, ph=ph, want=r.get('want'))
+    po = [o for o in (r.get('po') or []) if isinstance(o, dict)]      # 폰에서 바꾼 일정 → 일정 노트, 다음 번에 받았다고 알린다
+    if po:
+        plan_apply(po)
+        st['pdone'] = [o.get('id') for o in po]
     for d, o in (r.get('ob') or {}).items():
         if not DATE.match(d):
             continue
@@ -556,7 +621,7 @@ def sync_once(code):
         st['done'] += [[d] + a for a in acks]
     save_json(SYNC_STATE, st)
     # 곧바로 한 번 더: 볼트에 쓴 걸 올리고 받았다고 알릴 때, 바뀐 노트가 남았을 때, 폰이 노트를 받아 가는 중일 때
-    return bool(st['done']) or len(changed) == 40 or bool(st['want'])
+    return bool(st['done']) or bool(st['pdone']) or len(changed) == 40 or bool(st['want'])
 
 
 def save_json(p, data):
@@ -632,6 +697,8 @@ class H(BaseHTTPRequestHandler):
             return self.send(200, {'dates': note_dates()})
         if u.path == '/api/quotes':          # 명언 모음 화면
             return self.send(200, quote_list())
+        if u.path == '/api/plans':           # 일정 카드
+            return self.send(200, {'list': plan_list()})
         if u.path == '/api/sync':            # 설정 시트: 폰 연결 코드·마지막으로 맞춘 때
             return self.send(200, dict(SYNC, code=sync_code()))
         if u.path == '/api/job':
@@ -658,6 +725,16 @@ class H(BaseHTTPRequestHandler):
         except ValueError:
             return self.send(400, {'error': 'bad json'})
         path_, d = urlparse(self.path).path, str(body.get('date', ''))
+        if path_ == '/api/plans':            # 일정 체크·추가
+            ops = body.get('ops')
+            if not isinstance(ops, list) or not all(map(plan_ok, ops)):
+                return self.send(400, {'error': '잘못된 요청'})
+            try:
+                lst = plan_apply(ops)
+            except OSError as e:
+                return self.send(500, {'error': str(e)})
+            SYNC_WAKE.set()
+            return self.send(200, {'list': lst})
         if path_ != '/api/open' and not DATE.match(d):
             return self.send(400, {'error': '날짜가 이상해요'})
         if path_ == '/api/save':

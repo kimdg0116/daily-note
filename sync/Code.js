@@ -11,11 +11,13 @@
  * 저장은 Script Properties (gzip + base64, 8000자 조각) 뿐이라 따로 권한이 필요 없다.
  * 연결 코드는 Secret.js 의 CODE (git 제외, clasp 로만 올라감).
  *
- * 폰 → {code, op:'get', since, meta?}              → {rev, docs:{날짜:노트}, stale?, want?, dates?, mind?, quotes?, wait:{날짜:칸 수}, macAt}
+ * 폰 → {code, op:'get', since, meta?}              → {rev, docs:{날짜:노트}, stale?, want?, dates?, mind?, quotes?, plans?, wait:{날짜:칸 수}, pwait:[id], macAt}
  * 폰 → {code, op:'want'}                    → {ok}       모든 노트 다시 받기 (처음 연결할 때)
  * 위젯 → {code, op:'widget', today, yday}   → {today:{today?, tomorrow?}|null, yday:…}   할 일 칸만, 읽기만
  * 폰 → {code, op:'edit', date, fm, sec, t}  → {ok}       fm/sec = {키: {v: 새 값, b: 폰이 본 값}}
- * 맥 → {code, op:'mac', put, keep?, done, resync?, dates?, mind?, quotes?} → {ob, want}      quotes = 명언 모음 {list, favs}
+ * 폰 → {code, op:'plan', ops}             → {ok}       일정 바꾸기 [{id, act:'add'|'toggle', d, n, on?}] (맥이 일정 노트에 쓴다)
+ * 맥 → {code, op:'mac', put, keep?, done, pdone?, resync?, dates?, mind?, quotes?, plans?} → {ob, want, po}
+ *        quotes = 명언 모음 {list, favs}, plans = 일정 [{d, n, x}], po = 아직 맥이 안 쓴 일정 바꾸기, pdone = 맥이 쓴 것의 id
  *        resync = {to: 이번 묶음 마지막 날짜, done: 끝인지}, done = [[날짜, 'fm'|'sec', 키, t]]
  *
  * 반영: cd sync && ~/Code/apps/dosimetrist-calendar-server/tools/node_modules/.bin/clasp push -f
@@ -52,7 +54,8 @@ const OPS = {
     if (since && (meta.floor || 0) > since) r.stale = true;   // 그사이 상자에서 버린 노트가 있다 → 처음부터 다시
     for (const d in bi) if (bi[d][0] > since) r.docs[d] = getJ_('b:' + d);
     for (const d in ob) r.wait[d] = pending_(ob[d]);
-    if ((meta.mrev || 0) > since || q.meta) { r.dates = meta.dates || []; r.mind = meta.mind || []; r.quotes = meta.quotes || null; }   // meta = 놓친 폰이 다시 달라고
+    if ((meta.mrev || 0) > since || q.meta) { r.dates = meta.dates || []; r.mind = meta.mind || []; r.quotes = meta.quotes || null; r.plans = meta.plans || null; }   // meta = 놓친 폰이 다시 달라고
+    r.pwait = (getJ_('po') || []).map(o => o.id);
     const want = getJ_('want');
     if (want) {
       want.seen = rev;                                        // 폰이 지금까지 넣은 걸 다 받았다
@@ -91,15 +94,23 @@ const OPS = {
     return { ok: true };
   },
 
+  plan(q) {                                                  // 폰에서 바꾼 일정. 같은 id 는 한 번만
+    const po = getJ_('po') || [];
+    for (const o of q.ops || []) if (o && o.id && !po.some(x => x.id === o.id)) po.push(o);
+    setJ_('po', po.slice(-200));
+    return { ok: true };
+  },
+
   mac(q) {
     const ob = getJ_('ob') || {}, bi = getJ_('bi') || {}, meta = getJ_('meta') || {}, put = q.put || {};
-    let rev = +ALL.rev || 0, want = getJ_('want');
+    let rev = +ALL.rev || 0, want = getJ_('want'), po = getJ_('po') || [];
+    if ((q.pdone || []).length) { po = po.filter(o => !q.pdone.includes(o.id)); setJ_('po', po.length ? po : null); }   // 맥이 일정 노트에 쓴 것
     for (const [d, part, k, t] of q.done || []) {           // 맥이 볼트에 쓴 것 (그 사이 폰이 또 고쳤으면 남긴다)
       const e = ob[d] && ob[d][part] && ob[d][part][k];
       if (e && e.t === t) delete ob[d][part][k];
       if (ob[d] && !pending_(ob[d])) delete ob[d];
     }
-    if (Object.keys(put).length || q.dates || q.mind || q.quotes) rev++;
+    if (Object.keys(put).length || q.dates || q.mind || q.quotes || q.plans) rev++;
     for (const d in put) {
       const o = ob[d];
       if (o) for (const part of ['fm', 'sec']) for (const k in o[part]) put[d][part][k] = o[part][k].v;   // 아직 볼트에 안 쓴 폰 수정은 위에 얹는다
@@ -109,12 +120,13 @@ const OPS = {
     if (q.dates) { meta.dates = q.dates; meta.mrev = rev; }
     if (q.mind) { meta.mind = q.mind; meta.mrev = rev; }
     if (q.quotes) { meta.quotes = q.quotes; meta.mrev = rev; }
+    if (q.plans) { meta.plans = q.plans; meta.mrev = rev; }
     meta.macAt = Date.now();
     setJ_('ob', ob);
     if (Object.keys(put).length) { fit_(bi, meta); setJ_('bi', bi); }
     setJ_('meta', meta);
     W.rev = String(rev);
-    return { ob, want };
+    return { ob, want, po };
   },
 };
 
