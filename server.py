@@ -237,7 +237,7 @@ def quote_list():
 
 # ── 일정: 04 Life/Planner/일정.md 의 `- [ ] YYYY-MM-DD 이름` 줄. 앱은 데일리 노트 위 카드에 D-day 와 함께 보인다 ──
 # 날짜 없이 `- [ ] 이름 ➕ 넣은 날` 이면 기한 없는 일정 (가능한 빨리, 넣은 지 며칠째인지 보인다)
-# 다른 줄은 그대로 두고 체크·추가·지우기(앱에서 옆으로 밀어서)만 한다 (고치기는 옵시디언에서)
+# 다른 줄은 그대로 두고 체크·추가·고치기(날짜·이름)·지우기(앱에서 옆으로 밀어서)만 한다
 
 PLANS = os.path.join(VAULT, '04 Life', 'Planner', '일정.md')
 PLAN = re.compile(r'^(\s*[-*] \[)([ xX])\] (?:(\d{4}-\d{2}-\d{2})\s+)?(.+?)\s*$')
@@ -277,10 +277,12 @@ def real_date(s):
 
 
 def plan_ok(o):
-    """d 는 날짜 또는 '' (기한 없음), a(넣은 날)는 있으면 날짜"""
-    return isinstance(o, dict) and o.get('act') in ('add', 'toggle', 'del') and isinstance(o.get('n'), str) \
-        and (o.get('d') == '' or real_date(str(o.get('d')))) and (not o.get('a') or real_date(str(o['a']))) \
-        and (o['act'] != 'toggle' or isinstance(o.get('on'), bool))
+    """d 는 날짜 또는 '' (기한 없음), a(넣은 날)는 있으면 날짜. edit 은 nd·nn = 새 날짜·이름"""
+    day_ok = lambda v: v == '' or real_date(str(v))
+    return isinstance(o, dict) and o.get('act') in ('add', 'toggle', 'del', 'edit') and isinstance(o.get('n'), str) \
+        and day_ok(o.get('d')) and (not o.get('a') or real_date(str(o['a']))) \
+        and (o['act'] != 'toggle' or isinstance(o.get('on'), bool)) \
+        and (o['act'] != 'edit' or (day_ok(o.get('nd')) and isinstance(o.get('nn'), str)))
 
 
 def plan_apply(ops):
@@ -289,8 +291,8 @@ def plan_apply(ops):
         lines = plan_lines()
         old = list(lines)
         for o in filter(plan_ok, ops):
-            n = ' '.join(o['n'].split())[:200]
-            hit = next((i for i, p in plan_items(lines) if p['d'] == o['d'] and p['n'] == n), None)
+            n, items = ' '.join(o['n'].split())[:200], plan_items(lines)
+            hit = next((i for i, p in items if p['d'] == o['d'] and p['n'] == n), None)
             if o['act'] == 'add' and n and hit is None:          # 넣은 날은 폰에서 넣은 날 (맥이 늦게 받아도)
                 lines.append(f'- [ ] {o["d"]} {n}' if o['d'] else f'- [ ] {n} ➕ {o.get("a") or date.today().isoformat()}')
             elif o['act'] == 'toggle' and hit is not None:
@@ -299,6 +301,12 @@ def plan_apply(ops):
                 lines[hit] = line if o['on'] else DONE_AT.sub('', line)
             elif o['act'] == 'del' and hit is not None:           # 그 줄만 (없으면 이미 지운 것)
                 del lines[hit]
+            elif o['act'] == 'edit' and hit is not None:          # 날짜·이름만 바꾸고 체크·넣은 날·끝낸 날은 둔다
+                nd, nn = o['nd'], ' '.join(o['nn'].split())[:200]
+                if nn and not any(p['d'] == nd and p['n'] == nn for i, p in items if i != hit):   # 다른 일정과 같아지면 안 바꾼다
+                    m, a = PLAN.match(lines[hit]), dict(items)[hit]['a'] or ('' if nd else o.get('a') or date.today().isoformat())
+                    done = DONE_AT.search(m.group(4))
+                    lines[hit] = f'{m.group(1)}{m.group(2)}] ' + (f'{nd} ' if nd else '') + nn + (f' ➕ {a}' if a else '') + (done.group(0) if done else '')
         if lines != old:
             os.makedirs(os.path.dirname(PLANS), exist_ok=True)
             write(PLANS, '\n'.join(lines) + '\n')
