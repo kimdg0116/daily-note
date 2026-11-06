@@ -366,10 +366,12 @@ def mind_form(text=None):
     """템플릿의 Journal 아래 마음 기록 칸들을 그대로 읽어 화면 양식으로 (템플릿을 고치면 앱도 따라간다)"""
     lines = (text if text is not None else open(TEMPLATE, encoding='utf-8').read()).split('\n')
     start = next((i for i, l in enumerate(lines) if l.startswith('### ') and 'Journal' in l), len(lines))
-    out, cur, ask = [], None, []
+    out, cur, ask, tip = [], None, [], None
     for l in lines[start + 1:]:
         if 'randomQuote' in l or re.match(r'^>\s?\[!quote\]', l):
             break
+        if not l.startswith('>'):
+            tip = None
         if l.strip() == '---':
             out.append({'sep': True})
         elif m := re.match(r'^#### #(.+)', l):
@@ -389,6 +391,12 @@ def mind_form(text=None):
             ask = []
         elif m := re.match(r'^(?:(.+?) :: )?\*\*(.+)\*\*\s*$', l):
             ask.append({'label': m.group(1) or '', 'text': m.group(2)})
+        elif m := re.match(r'^>\s?\[!\w+\]([+-]?)\s*(.*)', l):            # 질문 바로 아래 콜아웃 = 그 질문의 참고 (앱에서는 접히는 목록)
+            tip = {'title': plain(m.group(2)), 'open': m.group(1) != '-', 'items': []}
+            if ask:
+                ask[-1]['tip'] = tip
+        elif tip and (s := plain(re.sub(r'^>\s?(?:[-*]\s+)?', '', l))):
+            tip['items'].append(s)
     return out
 
 

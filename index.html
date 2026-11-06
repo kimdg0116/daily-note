@@ -228,6 +228,14 @@ textarea:focus, .line:focus { border-color:var(--acc); background:var(--card); }
 .law { display:flex; gap:10px; width:100%; padding:6px 0; font-size:14px; line-height:1.6; white-space:pre-wrap; word-break:keep-all; border:0; background:none; color:var(--fg); text-align:left; }
 .law b { flex:none; font-family:var(--num); font-weight:600; color:var(--mute); }
 .ask { margin:10px 0 6px; font-size:14px; font-weight:600; line-height:1.5; color:var(--deep); }
+.tip { margin:-2px 0 8px; font-size:13px; color:var(--fg); }
+.tip summary { display:inline-flex; align-items:center; gap:3px; font-weight:600; color:var(--acc); cursor:pointer; list-style:none; }
+.tip summary::-webkit-details-marker { display:none; }
+.tip summary svg { width:14px; height:14px; transition:transform .15s; }
+.tip[open] summary svg { transform:rotate(90deg); }
+.tip ul { margin:6px 0 0; padding:8px 12px; list-style:none; line-height:1.55; border-radius:10px; background:var(--soft); word-break:keep-all; }
+.tip li + li { margin-top:3px; }
+.tip li b { margin-right:6px; color:var(--deep); }
 .ask em { display:inline-block; margin-right:6px; padding:0 7px; font-size:12px; font-style:normal; border-radius:6px; background:var(--soft); color:var(--acc); }
 .opt { display:flex; align-items:center; gap:10px; width:100%; padding:6px 0; font-size:14px; border:0; background:none; color:var(--fg); text-align:left; }
 .opt .box { width:18px; height:18px; }
@@ -386,7 +394,7 @@ function api(u, body) {
 /* ── 폰: 맥 서버 대신 동기화 서버(Apps Script, sync/Code.js)를 우체통으로 쓴다.
    우체통은 오가는 것만 잠깐 들고, 노트 사본은 폰 안(IndexedDB)에 전부 둔다. 처음 연결하면 맥이 모든 노트를 나눠 보내고,
    그 뒤로는 바뀐 노트만 온다. 고친 칸은 보내 두면 맥이 볼트에 쓴다 ── */
-const APP_VERSION = '26.11.06-1';                                     // 올릴 때마다 version.json · sw.js 와 같이 올린다
+const APP_VERSION = '26.11.06-2';                                     // 올릴 때마다 version.json · sw.js 와 같이 올린다
 const LOCAL = /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
 const PHONE = location.protocol === 'https:' || (LOCAL && location.search.includes('phone'));   // ?phone = 맥에서 폰 화면 시험
 // 맥에서 폰 화면을 시험할 때는 늘 가짜 연동 서버(node sync/test_sync.mjs --serve)로만 — 진짜 노트에 시험 글이 섞이지 않게
@@ -737,7 +745,11 @@ function mindCard(gi) {
     const f = D.fm, g = mindGroups()[gi] || [];
     return `<section class="card" id="c-mind${gi}"><h3>${g === D.mind_old ? '이전 칸' : MIND_TITLE[gi] || '마음 기록'}</h3>${gi === WEEK_GROUP && g !== D.mind_old ? `<div class="laws" id="laws">${lawsHtml()}</div>` : ''}${g.map(m => {
       const open = !m.check || f[m.check] === true || m.items.some(i => has(f[i.field]) || f[i.toggle] === true);
-      const asks = a => a.map(x => `<p class="ask">${x.label ? `<em>${esc(x.label)}</em>` : ''}${esc(x.text)}</p>`).join('');
+      const tip = t => t ? `<details class="tip"${t.open ? ' open' : ''}><summary>${svg('<path d="m9 6 6 6-6 6"/>')}${esc(dash(t.title || '참고'))}</summary><ul>${t.items.map(s => {
+        const i = s.indexOf(': ');
+        return `<li>${i > 0 ? `<b>${esc(dash(s.slice(0, i)))}</b>${esc(dash(s.slice(i + 2)))}` : esc(dash(s))}</li>`;
+      }).join('')}</ul></details>` : '';                                   // 템플릿에서 질문 바로 아래 콜아웃 (회고의 내 강점 설명)
+      const asks = a => a.map(x => `<p class="ask">${x.label ? `<em>${esc(x.label)}</em>` : ''}${esc(x.text)}</p>${tip(x.tip)}`).join('');
       return `<div class="mind">${m.check ? `<button type="button" class="mhead${f[m.check] === true ? ' on' : ''}" data-tog="${esc(m.check)}">#${esc(m.name)}<span class="sw"></span></button>` : `<div class="mhead fixed">#${esc(m.name)}</div>`}
         ${open ? `<div class="mbody">${m.items.map(i => i.toggle
           ? `<button type="button" class="opt${f[i.toggle] === true ? ' on' : ''}" data-tog="${esc(i.toggle)}"><span class="box"></span>${esc(i.label)}</button>`

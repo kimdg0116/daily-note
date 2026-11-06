@@ -83,6 +83,9 @@ assert names == ['회고', '음미하기', '오늘의발견', '오늘의법칙',
 assert [i for i, m in enumerate(mind) if m.get('sep')] == [4, 9]        # 묶음: 매일 / 힘든 날 / 주 1회
 assert [sum(len(i['ask']) for i in m['items']) for m in mind[5:9]] == [3, 4, 3, 2]     # 힘든 날 질문 12개
 assert len(mind[0]['items']) == 1 and len(mind[0]['items'][0]['ask']) == 2             # 회고: 질문 둘, 답칸 하나
+tip = mind[0]['items'][0]['ask'][1]['tip']                                             # 강점 질문 아래 접힌 콜아웃
+assert tip['open'] is False and [s.split(':')[0] for s in tip['items']] == ['전략', '심사숙고', '개별화', '공감', '연결성'], tip
+assert S.mind_form('### Journal\n#### #a\n**q**\n> [!tip]+ 참고\n> - x: **y**\n\n> 콜아웃 밖\n`INPUT[editor:a]`')[0]['items'][0]['ask'][0]['tip'] == {'title': '참고', 'open': True, 'items': ['x: y']}
 assert [len(m['items']) for m in mind[5:9]] == [2, 1, 1, 1]             # 답칸은 묶음마다 하나 (사건체크만 둘)
 assert [m['check'] for m in mind[:4]] == [''] * 4 and mind[5]['check'] == '사건_체크'    # 매일 칸은 토글 없이 늘 펼친다
 assert [i['field'] for i in mind[10]['items']] == ['주간_법칙', '주간_본보기']
