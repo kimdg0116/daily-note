@@ -10,6 +10,7 @@
 """
 import base64, gzip, hashlib, json, os, re, shutil, subprocess, tempfile, threading, time, unicodedata, urllib.request
 from datetime import date, timedelta
+from html import unescape
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs, quote
 
@@ -946,6 +947,20 @@ def md_html(h):
     return h.replace('\x01', '<mark>').replace('\x02', '</mark>')
 
 
+def note_index():
+    """볼트 노트 [[링크]] 이름 → 경로. 이름(소문자)과 폴더까지 쓴 경로 둘 다. 같은 이름이 여럿이면 옵시디언처럼 짧은 경로 (볼트 1000개에 4ms)"""
+    idx = {}
+    for root, dirs, files in os.walk(VAULT):
+        dirs[:] = [x for x in dirs if not x.startswith('.')]
+        for fn in files:
+            if fn.endswith('.md'):
+                rel = nfc(os.path.relpath(os.path.join(root, fn), VAULT)).replace(os.sep, '/')
+                for k in (rel[:-3].lower(), nfc(fn[:-3]).lower()):
+                    if k not in idx or len(rel) < len(idx[k]):
+                        idx[k] = rel
+    return idx
+
+
 def read_doc(rel):
     p = vault_md(rel)
     fm, body = split(open(p, encoding='utf-8').read())
@@ -953,7 +968,13 @@ def read_doc(rel):
     if MD is None:
         raise ValueError('이 맥의 파이썬에 markdown-it-py 가 없어요')
     body = re.sub(r'%%.*?%%', '', body, flags=re.S)
-    return {'rel': nfc(rel), 'v': int(os.path.getmtime(p)), 'html': md_blocks(body.split('\n')),
+    idx = note_index()
+
+    def link(m):                                # [[링크]] 에 실제 노트 경로(data-rel)를 붙인다 → 목록 밖 노트도 앱 안에서 연다 (폰은 이 경로로 본문을 달라고 한다)
+        t = re.sub(r'\.md$', '', nfc(unescape(m.group(1))).lower())
+        return m.group(0)[:-1] + (f' data-rel="{esc_html(idx[t])}">' if t in idx else '>')
+    h = re.sub(r'<a class="internal-link" data-href="([^"]*)">', link, md_blocks(body.split('\n')))
+    return {'rel': nfc(rel), 'v': int(os.path.getmtime(p)), 'html': h, 'f': 2,   # f = 본문 모양 (2 = 링크에 data-rel). 폰은 옛 모양이면 다시 받는다
             'props': {k: str(f[k])[:10] if k == 'created' else str(f[k]) for k in ('channel', 'description', 'created', 'source') if f.get(k)}}
 
 

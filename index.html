@@ -572,7 +572,7 @@ function api(u, body) {
 /* ── 폰: 맥 서버 대신 동기화 서버(Apps Script, sync/Code.js)를 우체통으로 쓴다.
    우체통은 오가는 것만 잠깐 들고, 노트 사본은 폰 안(IndexedDB)에 전부 둔다. 처음 연결하면 맥이 모든 노트를 나눠 보내고,
    그 뒤로는 바뀐 노트만 온다. 고친 칸은 보내 두면 맥이 볼트에 쓴다 ── */
-const APP_VERSION = '26.11.10-3';                                     // 올릴 때마다 version.json · sw.js 와 같이 올린다
+const APP_VERSION = '26.11.10-4';                                     // 올릴 때마다 version.json · sw.js 와 같이 올린다
 const LOCAL = /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
 const PHONE = location.protocol === 'https:' || (LOCAL && location.search.includes('phone'));   // ?phone = 맥에서 폰 화면 시험
 // 맥에서 폰 화면을 시험할 때는 늘 가짜 연동 서버(node sync/test_sync.mjs --serve)로만 — 진짜 노트에 시험 글이 섞이지 않게
@@ -686,7 +686,7 @@ function syncPhone() {
     if (r.theme != null) SY.theme = r.theme;
     if (r.reads || Object.keys(r.rdocs || {}).length) {               // 읽을 글: 받은 본문은 두고, 목록에서 빠진(읽은 지 하루 지난) 글의 본문은 지운다
       if (r.reads) SY.reads = r.reads;
-      const live = new Set((SY.reads || []).map(x => x.rel));
+      const live = new Set([...(SY.reads || []).map(x => x.rel), ...Object.keys(RD.extra)]);   // 링크로 연 목록 밖 노트는 이번에 켠 동안 둔다
       for (const k in SY.rasked) if (!live.has(k)) delete SY.rasked[k];
       saveRdocs(r.rdocs || {}, Object.keys(RDOCS).filter(k => !live.has(k) && !(k in (r.rdocs || {}))));
       const used = new Set(Object.values(RDOCS).flatMap(d => imgNames(d.html)));             // 남은 본문이 안 쓰는 그림은 지운다
@@ -1306,13 +1306,13 @@ async function setScreen(s) {
 /* ── READING: 읽을 글 (Home 「읽어야 할 글」과 같은 기준, server.py read_items).
    읽음을 누르면 그 노트의 read_on·memo 와 오늘 데일리 노트 「오늘 읽은 글」에 한 줄. 오늘 읽은 글은 그날 안에 되돌릴 수 있다.
    본문은 맥이 HTML 로 바꿔 주고, 색·글씨는 볼트의 옵시디언 테마(/api/theme.css)를 그대로 쓴다 ── */
-const RD = { list: [], today: '', filter: 'all', open: null, drafts: {}, docs: new Map(), y: { daily: 0, read: 0 } };
+const RD = { list: [], extra: {}, today: '', filter: 'all', open: null, drafts: {}, docs: new Map(), y: { daily: 0, read: 0 } };   // extra = 링크로 연 목록 밖 노트 (이번에 켠 동안만)
 const RGROUPS = { all: '전체', work: '일', clip: '클리핑', concept: '개념·질문' };
 const rWide = () => matchMedia('(min-width:900px)').matches;
 const rIn = x => RD.filter === 'all' || x.g === RD.filter;
 const rUnread = all => RD.list.filter(x => !x.read_on && (all || rIn(x)));
 const rDone = all => RD.list.filter(x => x.read_on && (all || rIn(x)));
-const rItem = rel => RD.list.find(x => x.rel === rel);
+const rItem = rel => RD.list.find(x => x.rel === rel) || RD.extra[rel];
 const isDark = () => (document.documentElement.dataset.theme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')) === 'dark';
 function inkMode() { const r = $('#reader'); if (r) { r.classList.toggle('theme-dark', isDark()); r.classList.toggle('theme-light', !isDark()); } }
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change', inkMode);
@@ -1384,7 +1384,7 @@ function rReader() {
         <button type="button" class="icon-btn" data-r="prev" aria-label="앞서 본 글" title="앞서 본 글">${svg('<path d="M19 12H5M12 19l-7-7 7-7"/>')}</button>
         <button type="button" class="icon-btn" data-r="next" aria-label="다음에 본 글" title="다음에 본 글">${svg('<path d="M5 12h14M12 5l7 7-7 7"/>')}</button>
         <button type="button" class="icon-btn" data-r="obs" aria-label="옵시디언에서 열기" title="옵시디언에서 열기">${svg('<path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/>')}</button></div>
-      <div class="rscroll"><div class="rdoc"><div class="rcrumb">${esc(x.folder)} · 읽는 데 ${x.min}분</div><div class="inline-title">${esc(x.title)}</div>
+      <div class="rscroll"><div class="rdoc"><div class="rcrumb">${esc(x.folder)}${x.min ? ` · 읽는 데 ${x.min}분` : ''}</div><div class="inline-title">${esc(x.title)}</div>
         <div class="rbody"><p class="rwait">불러오는 중</p></div></div></div>
       <div class="rfoot"><input id="rmemo" type="text" autocomplete="off" enterkeyhint="done" aria-label="한 줄 메모" placeholder="한 줄 메모 (안 써도 돼요)"><button type="button" class="main" data-r="done"></button></div></div>`;
     rBody(x.rel);
@@ -1394,6 +1394,7 @@ function rReader() {
   if (ps.textContent !== pos) ps.textContent = pos;
   r.querySelector('[data-r=prev]').disabled = rTo(-1) < 0;
   r.querySelector('[data-r=next]').disabled = rTo(1) < 0;
+  r.querySelector('.rfoot').hidden = !!x.extra;                      // 목록 밖 노트는 읽기만
   if (b.textContent !== label) b.textContent = label;
   b.classList.toggle('undo', !!x.read_on);
   if (document.activeElement !== m) m.value = x.read_on ? x.memo : RD.drafts[x.rel] || '';
@@ -1430,13 +1431,13 @@ function rList() {                                                    // 폰: �
   return (SY.reads || []).map(x => { const m = ROUT[x.rel]; return m ? { ...x, read_on: m.on ? m.day : '', memo: m.on ? m.memo : '' } : x; });
 }
 function rImgWanted() {                                               // 폰: 받아 둔 본문(위 24개 + 연 글)의 볼트 그림 중 아직 없는 것. 연 글 것부터
-  const L = rList(), win = [L.find(x => x.rel === RD.open), ...L.filter(x => !x.read_on).slice(0, 24)].filter(Boolean);
+  const L = rList(), win = [L.find(x => x.rel === RD.open) || RD.extra[RD.open], ...L.filter(x => !x.read_on).slice(0, 24)].filter(Boolean);
   return [...new Set(win.flatMap(x => RDOCS[x.rel] ? imgNames(RDOCS[x.rel].html) : []))].filter(n => !RIMGS[n]);
 }
-function rWanted() {                                                  // 폰: 받아 둘 본문 = 안 읽은 글 위에서 24개 + 지금 연 글 (없거나 노트가 바뀐 것, 5분 안에 달라고 한 건 빼고)
-  const L = rList(), want = L.filter(x => !x.read_on).slice(0, 24), open = L.find(x => x.rel === RD.open), now = Date.now();
+function rWanted() {                                                  // 폰: 받아 둘 본문 = 안 읽은 글 위에서 24개 + 지금 연 글 (없거나 노트가 바뀌었거나 옛 모양인 것, 5분 안에 달라고 한 건 빼고)
+  const L = rList(), want = L.filter(x => !x.read_on).slice(0, 24), open = L.find(x => x.rel === RD.open) || RD.extra[RD.open], now = Date.now();
   if (open && !want.includes(open)) want.unshift(open);
-  return want.filter(x => (!RDOCS[x.rel] || RDOCS[x.rel].v !== x.v) && now - (SY.rasked[x.rel] || 0) > 300000).map(x => x.rel);
+  return want.filter(x => (!RDOCS[x.rel] || (x.v && RDOCS[x.rel].v !== x.v) || !RDOCS[x.rel].f) && now - (SY.rasked[x.rel] || 0) > 300000).map(x => x.rel);
 }
 const rUrl = u => { try { return decodeURI(u); } catch (e) { return u; } };   // 주소의 %EC.. 를 한글로 보이게
 /* 본문 칸에서 거쳐 간 글 기록 (브라우저 뒤로·앞으로처럼). a = 글, y = 떠날 때 스크롤, i = 지금 자리.
@@ -1456,7 +1457,13 @@ function rOpen(rel, j) {                                              // j: 뒤�
   rDraw();
   if (rel && !(j >= 0)) $('#reader .rscroll')?.scrollTo(0, 0);
 }
-const rStep = d => { const j = rTo(d); if (j >= 0) rOpen(RH.a[j], j); };
+function rStep(d) {
+  const j = rTo(d);
+  if (j < 0) return;
+  rOpen(RH.a[j], j);
+  if (!matchMedia('(prefers-reduced-motion: reduce)').matches)       // 어느 쪽으로 갔는지 보이게 살짝 밀려 들어온다
+    $('#reader .rscroll')?.animate([{ transform: `translateX(${d * 40}px)`, opacity: .3 }, { transform: 'none', opacity: 1 }], { duration: 200, easing: 'ease-out' });
+}
 async function rMark(x, on, memo) {
   const before = { read_on: x.read_on, memo: x.memo };
   x.read_on = on ? RD.today : ''; x.memo = on ? memo : '';
@@ -1490,9 +1497,14 @@ $('#reads').addEventListener('click', e => {
   const a = e.target.closest('a');
   if (a) {                                                            // [[링크]] 는 목록에 있으면 여기서, 없으면 옵시디언에서. 웹 링크는 브라우저로
     e.preventDefault();
-    if (a.classList.contains('internal-link')) {
-      const t = a.dataset.href.normalize('NFC').toLowerCase(), hit = RD.list.find(x => x.title.toLowerCase() === t || x.rel.toLowerCase() === t + '.md');
-      return hit ? rOpen(hit.rel) : api('/api/open', { rel: a.dataset.href }).catch(err => toast(err.message));
+    if (a.classList.contains('internal-link')) {                     // data-rel = 맥이 찾아 둔 실제 노트 경로 (없으면 볼트에 없는 노트 → 옵시디언)
+      const t = a.dataset.href.normalize('NFC').toLowerCase(), rel = a.dataset.rel;
+      const hit = RD.list.find(x => x.rel === rel || x.title.toLowerCase() === t || x.rel.toLowerCase() === t + '.md');
+      if (hit) return rOpen(hit.rel);
+      if (!rel) return api('/api/open', { rel: a.dataset.href }).catch(err => toast(err.message));
+      const at = rel.lastIndexOf('/');
+      RD.extra[rel] ||= { rel, title: rel.slice(at + 1, -3), folder: rel.slice(0, Math.max(at, 0)), extra: true };
+      return rOpen(rel);
     }
     if (/^https?:/.test(a.href)) return PHONE ? open(a.href) : api('/api/openurl', { url: a.href }).catch(err => toast(err.message));
     return;
@@ -1507,6 +1519,17 @@ $('#reads').addEventListener('click', e => {
   if (d.r === 'prev' || d.r === 'next') return rStep(d.r === 'prev' ? -1 : 1);
   if (d.r === 'obs' && x) return api('/api/open', { rel: x.rel }).catch(err => toast(err.message));
   if (d.r === 'done' && x) return x.read_on ? rUndo(x) : rRead(x, true);
+});
+let rTouch = null;                                                    // 본문을 좌우로 훑기 (아이폰·아이패드): 오른쪽으로 = 뒤로, 왼쪽으로 = 앞으로
+$('#reads').addEventListener('touchstart', e => {
+  const t = e.touches[0];                                             // 옆으로 밀리는 표·코드 칸 안에서는 그 칸을 민다
+  rTouch = e.touches.length === 1 && e.target.closest('#reader .rscroll') && !e.target.closest('pre, table') ? { x: t.clientX, y: t.clientY } : null;
+}, { passive: true });
+$('#reads').addEventListener('touchend', e => {
+  if (!rTouch) return;
+  const t = e.changedTouches[0], dx = t.clientX - rTouch.x, dy = t.clientY - rTouch.y;
+  rTouch = null;
+  if (Math.abs(dx) > 70 && Math.abs(dx) > 2 * Math.abs(dy) && getSelection().isCollapsed) rStep(dx > 0 ? -1 : 1);   // 글을 고르는 중이면 그대로
 });
 $('#reads').addEventListener('input', e => { const x = rItem(RD.open); if (e.target.id === 'rmemo' && x && !x.read_on) RD.drafts[x.rel] = e.target.value; });
 $('#reads').addEventListener('change', e => { const x = rItem(RD.open); if (e.target.id === 'rmemo' && x) rMemo(x, e.target.value); });
