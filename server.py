@@ -298,6 +298,8 @@ def plan_apply(ops):
             elif o['act'] == 'toggle' and hit is not None:
                 m = PLAN.match(lines[hit])
                 line = m.group(1) + ('x' if o['on'] else ' ') + lines[hit][m.end(2):]
+                if o['on'] and m.group(2) == ' ' and not DONE_AT.search(line):   # 끝낸 날 (Tasks 플러그인처럼) → 바탕화면 위젯이 그날은 체크된 채로 둔다
+                    line = line.rstrip() + f' ✅ {date.today().isoformat()}'
                 lines[hit] = line if o['on'] else DONE_AT.sub('', line)
             elif o['act'] == 'del' and hit is not None:           # 그 줄만 (없으면 이미 지운 것)
                 del lines[hit]
