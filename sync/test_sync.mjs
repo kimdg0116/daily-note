@@ -95,5 +95,30 @@ assert.equal(call({ op: 'get', since: stale }).stale, true);
 const fresh = call({ op: 'get', since: 0 }).rev;
 call({ op: 'mac', put: { [C]: doc(C, 1) } });
 assert.equal(call({ op: 'get', since: fresh }).stale, undefined);                         // 자주 들르면 괜찮다
+// 읽을 글: 목록·테마는 meta 로, 본문은 폰이 달라는 것만 rb 상자에. 맥이 넣으면 요청에서 빠진다
+const R1 = '03 Economy/개념/듀레이션.md', R2 = '04 Life/읽을거리/깊게 읽기.md', LIST = [{ rel: R1, title: '듀레이션', read_on: '', v: 1 }];
+const rr = call({ op: 'get', since: 0 }).rev;
+call({ op: 'mac', reads: LIST, theme: '.ink { --x: 1 }' });
+r = call({ op: 'get', since: rr });
+assert.deepEqual(r.reads, LIST); assert.equal(r.theme, '.ink { --x: 1 }'); assert.deepEqual(r.rdocs, {});
+call({ op: 'rwant', rels: [R1, R2, R1, 5] });
+assert.deepEqual(call({ op: 'mac' }).rq, [R1, R2]);
+const rr2 = r.rev;
+assert.deepEqual(call({ op: 'mac', rput: { a1b2: { rel: R1, html: '<p>본문</p>', v: 1 } }, rqdone: [R1] }).rq, [R2]);
+assert.deepEqual(call({ op: 'get', since: rr2 }).rdocs, { [R1]: { rel: R1, html: '<p>본문</p>', v: 1 } });
+assert.deepEqual(call({ op: 'get', since: call({ op: 'get', since: 0 }).rev }).rdocs, {});     // 이미 받은 폰에는 다시 안 온다
+// 읽음: 같은 글은 나중 것만. 맥이 쓰고 rdone 으로 알리면 빠진다 (그 사이 또 눌렀으면 남긴다)
+call({ op: 'rmark', marks: [{ rel: R1, on: true, memo: '한 줄', day: '2026-11-09', t: 10 }, { rel: 7 }] });
+assert.deepEqual(call({ op: 'get', since: 0 }).rwait, [R1]);
+assert.deepEqual(call({ op: 'mac' }).rob, { [R1]: { on: true, memo: '한 줄', day: '2026-11-09', t: 10 } });
+call({ op: 'rmark', marks: [{ rel: R1, on: false, day: '2026-11-09', t: 20 }] });
+assert.deepEqual(Object.keys(call({ op: 'mac', rdone: [[R1, 10]] }).rob), [R1]);
+assert.deepEqual(call({ op: 'mac', rdone: [[R1, 20]] }).rob, {});
+assert.deepEqual(call({ op: 'get', since: 0 }).rwait, []);
+// 본문 상자가 넘치면 오래된 것부터 버린다 (노트 상자와 따로라 노트는 그대로)
+const keep = Object.keys(store).filter(k => k.startsWith('b:')).length;
+for (let i = 0; i < 4; i++) call({ op: 'mac', rput: { ['big' + i]: { rel: 'r' + i, html: randomBytes(30000).toString('base64') } } });
+assert.ok(Object.keys(store).filter(k => k.startsWith('rb:') && !k.endsWith('#n')).reduce((n, k) => n + store[k].length, 0) <= 90000);
+assert.equal(Object.keys(store).filter(k => k.startsWith('b:')).length, keep);
 console.log('ok');
 }

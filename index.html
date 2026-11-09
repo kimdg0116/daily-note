@@ -266,6 +266,7 @@ body.reading { --gut:max(16px, calc((100vw - 1080px) / 2)); }
 .ink .rdoc .callout-fold { display:flex; margin-left:auto; opacity:.7; transition:transform .15s; }
 .ink .rdoc details.callout:not([open]) .callout-fold { transform:rotate(-90deg); }
 .ink .rdoc .callout-content { margin-top:.4em; }
+.ink .rdoc .rimg { display:block; padding:8px 12px; border:1px dashed var(--background-modifier-border); border-radius:5px; color:var(--text-faint); font-size:.85em; }
 .ink .rdoc .dv-skip { padding:8px 12px; border:1px dashed var(--background-modifier-border); border-radius:5px; color:var(--text-faint); font-size:.85em; }
 .phone .mac-only, html:not(.phone) .phone-only { display:none !important; }
 .pill { flex:none; height:32px; padding:0 13px; font-size:13px; font-weight:700; border:1px solid var(--line); border-radius:999px; background:var(--card); color:var(--acc); }
@@ -561,7 +562,7 @@ function api(u, body) {
 /* ── 폰: 맥 서버 대신 동기화 서버(Apps Script, sync/Code.js)를 우체통으로 쓴다.
    우체통은 오가는 것만 잠깐 들고, 노트 사본은 폰 안(IndexedDB)에 전부 둔다. 처음 연결하면 맥이 모든 노트를 나눠 보내고,
    그 뒤로는 바뀐 노트만 온다. 고친 칸은 보내 두면 맥이 볼트에 쓴다 ── */
-const APP_VERSION = '26.11.09-4';                                     // 올릴 때마다 version.json · sw.js 와 같이 올린다
+const APP_VERSION = '26.11.09-5';                                     // 올릴 때마다 version.json · sw.js 와 같이 올린다
 const LOCAL = /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
 const PHONE = location.protocol === 'https:' || (LOCAL && location.search.includes('phone'));   // ?phone = 맥에서 폰 화면 시험
 // 맥에서 폰 화면을 시험할 때는 늘 가짜 연동 서버(node sync/test_sync.mjs --serve)로만 — 진짜 노트에 시험 글이 섞이지 않게
@@ -569,14 +570,15 @@ const SYNC_URL = LOCAL ? 'http://127.0.0.1:8751/' : 'https://script.google.com/m
 if (PHONE) document.documentElement.classList.add('phone');
 // SY = 연결 상태(작은 것, localStorage), DOCS = 노트 사본 전부(IndexedDB, 기한·용량 걱정 없음), OUT = 아직 못 보낸 폰 수정
 // PO = 폰에서 바꾼 일정 (보냈어도 맥이 일정 노트에 쓸 때까지 화면에 얹는다)
-let SY = {}, OUT = {}, DOCS = {}, PO = [];
-try { SY = JSON.parse(localStorage.getItem('dn.sync')) || {}; OUT = JSON.parse(localStorage.getItem('dn.out')) || {}; PO = JSON.parse(localStorage.getItem('dn.plan')) || []; } catch (e) {}
-delete SY.docs; delete SY.seen;                                       // 예전(localStorage 에 노트 보관) 흔적
-function keepSY() { try { localStorage.setItem('dn.sync', JSON.stringify(SY)); localStorage.setItem('dn.out', JSON.stringify(OUT)); localStorage.setItem('dn.plan', JSON.stringify(PO)); } catch (e) {} }
+// ROUT = 폰에서 누른 읽음·메모 (보냈어도 맥이 노트에 쓸 때까지 목록에 얹는다), RDOCS = 받아 둔 읽을 글 본문 (IndexedDB rdocs)
+let SY = {}, OUT = {}, DOCS = {}, PO = [], ROUT = {}, RDOCS = {};
+try { SY = JSON.parse(localStorage.getItem('dn.sync')) || {}; OUT = JSON.parse(localStorage.getItem('dn.out')) || {}; PO = JSON.parse(localStorage.getItem('dn.plan')) || []; ROUT = JSON.parse(localStorage.getItem('dn.read')) || {}; } catch (e) {}
+delete SY.docs; delete SY.seen; SY.rasked = SY.rasked || {};                                       // 예전(localStorage 에 노트 보관) 흔적
+function keepSY() { try { localStorage.setItem('dn.sync', JSON.stringify(SY)); localStorage.setItem('dn.out', JSON.stringify(OUT)); localStorage.setItem('dn.plan', JSON.stringify(PO)); localStorage.setItem('dn.read', JSON.stringify(ROUT)); } catch (e) {} }
 const idb = new Promise(ok => {                                       // 폰 안 노트 보관함
   if (!PHONE || !window.indexedDB) return ok(null);
-  const q = indexedDB.open('daily-note', 1);
-  q.onupgradeneeded = () => q.result.createObjectStore('docs');
+  const q = indexedDB.open('daily-note', 2);                          // 2 = 읽을 글 본문(rdocs) 칸을 더했다
+  q.onupgradeneeded = () => { for (const n of ['docs', 'rdocs']) if (!q.result.objectStoreNames.contains(n)) q.result.createObjectStore(n); };
   q.onsuccess = () => ok(q.result); q.onerror = () => ok(null);
 });
 const ready = idb.then(db => db && new Promise(ok => {
@@ -584,6 +586,15 @@ const ready = idb.then(db => db && new Promise(ok => {
   q.onsuccess = () => { const c = q.result; if (c) { DOCS[c.key] = c.value; c.continue(); } else ok(); };
   q.onerror = () => ok();
 }));
+const rready = idb.then(db => db && new Promise(ok => {
+  const q = db.transaction('rdocs').objectStore('rdocs').openCursor();
+  q.onsuccess = () => { const c = q.result; if (c) { RDOCS[c.key] = c.value; c.continue(); } else ok(); };
+  q.onerror = () => ok();
+}));
+function saveRdocs(docs, drop = []) {                                 // 받은 본문은 넣고, 목록에서 빠진 글의 본문은 지운다
+  Object.assign(RDOCS, docs); drop.forEach(k => delete RDOCS[k]);
+  idb.then(db => { if (!db) return; const st = db.transaction('rdocs', 'readwrite').objectStore('rdocs'); for (const k in docs) st.put(docs[k], k); drop.forEach(k => st.delete(k)); });
+}
 function saveDocs(docs) {
   Object.assign(DOCS, docs);
   idb.then(db => { if (!db) return; const st = db.transaction('docs', 'readwrite').objectStore('docs'); for (const d in docs) st.put(docs[d], d); });
@@ -640,8 +651,14 @@ function syncPhone() {
       if (r.err && r.err !== 'bad') throw new Error(r.err);
       if (!r.err) { ops.forEach(o => { o.sent = true; }); keepSY(); }      // bad = 일정을 모르는 옛 우체통 → 폰에 두고 다음에 (다른 연동은 그대로)
     }
+    const marks = Object.keys(ROUT).filter(k => !ROUT[k].sent).map(rel => ({ rel, ...ROUT[rel] }));   // 폰에서 누른 읽음·메모 보내기
+    if (marks.length) {
+      const r = await post({ op: 'rmark', marks });
+      if (r.err && r.err !== 'bad') throw new Error(r.err);
+      if (!r.err) { marks.forEach(m => { if (ROUT[m.rel]?.t === m.t) ROUT[m.rel].sent = true; }); keepSY(); }
+    }
     if (!SY.full && !SY.asked) { await post({ op: 'want' }); SY.asked = true; SY.rev = 0; keepSY(); }   // 처음엔 맥에 노트 전부를 달라고
-    const r = await post({ op: 'get', since: SY.rev || 0, meta: !SY.quotes });   // 2) 맥에서 바뀐 노트 받기 (명언 모음을 놓쳤으면 다시 달라고)
+    const r = await post({ op: 'get', since: SY.rev || 0, meta: !SY.quotes || !SY.reads });   // 2) 맥에서 바뀐 노트 받기 (명언 모음·읽을 글 목록을 놓쳤으면 다시 달라고)
     if (r.err) throw new Error(r.err);
     if (r.stale) { Object.assign(SY, { full: false, asked: false, rev: 0 }); keepSY(); busy = null; return syncPhone(); }   // 너무 오래 안 열었다 → 전부 다시
     saveDocs(r.docs);
@@ -649,6 +666,19 @@ function syncPhone() {
     if (r.mind) SY.mind = r.mind;
     if (r.quotes) SY.quotes = r.quotes;
     if (r.plans) SY.plans = r.plans;
+    if (r.theme != null) SY.theme = r.theme;
+    if (r.reads || Object.keys(r.rdocs || {}).length) {               // 읽을 글: 받은 본문은 두고, 목록에서 빠진(읽은 지 하루 지난) 글의 본문은 지운다
+      if (r.reads) SY.reads = r.reads;
+      const live = new Set((SY.reads || []).map(x => x.rel));
+      for (const k in SY.rasked) if (!live.has(k)) delete SY.rasked[k];
+      saveRdocs(r.rdocs || {}, Object.keys(RDOCS).filter(k => !live.has(k) && !(k in (r.rdocs || {}))));
+    }
+    if (Array.isArray(r.rwait)) for (const rel in ROUT) if (ROUT[rel].sent && !r.rwait.includes(rel)) delete ROUT[rel];   // 우체통에서 빠졌다 = 맥이 노트에 썼다
+    const rw = rWanted();                                             // 아직 없는 본문을 달라고 (위에서부터 24개 + 연 글)
+    if (rw.length) {
+      const q = await post({ op: 'rwant', rels: rw });
+      if (!q.err) { const now = Date.now(); rw.forEach(x => { SY.rasked[x] = now; }); SY.rfast = now + 120000; }
+    } else SY.rfast = 0;
     PO = PO.filter(o => !o.sent || (r.pwait || []).includes(o.id));   // 우체통에서 빠졌다 = 맥이 일정 노트에 썼다 (같은 응답의 plans 에 들어 있다)
     for (const d in DOCS) if (DOCS[d].fm && FAV in DOCS[d].fm && !r.wait?.[d] && !OUT[d]) { delete DOCS[d].fm[FAV]; saveDocs({ [d]: DOCS[d] }); }   // 맥이 명언 모음에 썼다
     if (SY.asked && !r.want) Object.assign(SY, { full: true, asked: false });
@@ -667,6 +697,11 @@ async function phoneRefresh(r) {                                      // 받은 
   if (!$('#settings').hidden) drawSync();
   if (!$('#qpanel').hidden) loadQuotes();
   loadPlans();
+  if (SCREEN === 'read') {                                            // 읽을 글: 기다리던 본문이 왔으면 다시 그린다
+    for (const rel in r?.rdocs || {}) RD.docs.delete(rel);
+    if (RD.open && RDOCS[RD.open] && $('#reader .rwait')) $('#reader').dataset.rel = '';
+    loadReads();
+  }
 }
 if (PHONE) api = async (u, body) => {
   const [p, qs] = u.split('?');
@@ -688,6 +723,23 @@ if (PHONE) api = async (u, body) => {
       keepSY(); clearTimeout(pushT); pushT = setTimeout(() => syncPhone().then(phoneRefresh, () => {}), 1200);
     }
     return { list: planOps(SY.plans || [], PO), wait: !SY.plans && !!SY.code };
+  }
+  if (p === '/api/reads') {                                           // 맥이 보낸 읽을 글 + 폰에서 누른 읽음
+    await rready;
+    if (!SY.reads) throw new Error(SY.code ? '맥에서 읽을 글 목록을 받아 오는 중이에요. 맥 앱이 켜져 있으면 곧 들어와요' : '설정 > 폰 연동에서 맥과 연결하면 보여요');
+    return { list: rList(), today: today() };
+  }
+  if (p === '/api/read') {
+    await rready;
+    const rel = new URLSearchParams(qs).get('rel'), x = rList().find(y => y.rel === rel), d = RDOCS[rel];
+    if (d && (!x || d.v === x.v)) return d;
+    SY.rasked[rel] = 0; SY.rfast = Date.now() + 120000; nextPull = 0; keepSY();   // 이 글부터 달라고
+    throw Object.assign(new Error('맥에서 본문을 받아 오는 중이에요. 맥 앱이 켜져 있으면 1분 안에 들어와요'), { wait: true });
+  }
+  if (p === '/api/readmark') {
+    ROUT[body.rel] = { on: body.on, memo: body.memo || '', day: today(), t: Date.now() };
+    keepSY(); clearTimeout(pushT); pushT = setTimeout(() => syncPhone().then(phoneRefresh, () => {}), 1200);
+    return { ok: true, today: today() };
   }
   if (p === '/api/open') { location.href = `obsidian://open?vault=${encodeURIComponent(vaultName())}&file=${encodeURIComponent(body.rel)}`; return { ok: true }; }
   throw new Error('명언 정리는 맥에서 해요');
@@ -1196,7 +1248,6 @@ function showMenu(on) {
   $('#brand').setAttribute('aria-expanded', on);
   if (!on) return;
   document.querySelectorAll('#screens [data-screen]').forEach(b => { b.classList.toggle('on', b.dataset.screen === SCREEN); b.setAttribute('aria-checked', b.dataset.screen === SCREEN); });
-  if (PHONE) return void ($('#readSub').textContent = '맥 앱에서 · 폰 연결은 준비 중');
   api('/api/reads').then(r => { RD.list = r.list; RD.today = r.today; readSub(); }).catch(() => {});
 }
 const readSub = () => { const n = RD.list.filter(x => !x.read_on).length; $('#readSub').textContent = n ? `읽어야 할 노트 · ${n}개 남음` : '읽어야 할 노트'; };
@@ -1248,14 +1299,17 @@ const CALLOUT_ALIAS = { summary: 'abstract', tldr: 'abstract', hint: 'tip', impo
   caution: 'warning', attention: 'warning', fail: 'failure', missing: 'failure', error: 'danger', bug: 'danger', cite: 'quote' };
 
 async function loadReads() {
-  if (PHONE) {
-    $('#rlist').innerHTML = '<div class="empty"><b>아이폰 읽기는 다음 단계에서 맥과 이어요</b>지금은 맥 앱에서 읽을 수 있어요.</div>';
-    return void ($('#reader').hidden = true);
+  if (!PHONE && !$('#inkcss')) document.head.insertAdjacentHTML('beforeend', '<link id="inkcss" rel="stylesheet" href="/api/theme.css">');
+  if (PHONE) {                                                        // 폰은 맥이 우체통으로 보낸 테마를 그대로
+    const st = $('#inkcss') || document.head.appendChild(Object.assign(document.createElement('style'), { id: 'inkcss' }));
+    if (st.textContent !== (SY.theme || '')) st.textContent = SY.theme || '';
   }
-  if (!$('#inkcss')) document.head.insertAdjacentHTML('beforeend', '<link id="inkcss" rel="stylesheet" href="/api/theme.css">');
   const r = await api('/api/reads').catch(e => ({ err: e.message }));
   if (r.err) return void ($('#rlist').innerHTML = `<div class="empty"><b>목록을 불러오지 못했어요</b>${esc(r.err)}</div>`);
-  RD.list = r.list; RD.today = r.today;
+  RD.today = r.today;
+  const sig = JSON.stringify(r.list);                                 // 폰은 몇 초마다 다시 받는다 → 바뀐 게 없으면 목록 단추를 새로 만들지 않는다 (아이폰 탭 끊김)
+  if (sig === RD.sig && $('#rlist .sum')) return rReader();
+  RD.sig = sig; RD.list = r.list;
   rDraw();
 }
 function rRow(x, done) {
@@ -1297,29 +1351,43 @@ function rReader() {
     rBody(x.rel);
   }
   const ul = rUnread(), i = ul.indexOf(x), b = r.querySelector('[data-r=done]'), m = $('#rmemo');
-  r.querySelector('.rpos').textContent = x.read_on ? '오늘 읽음' : i >= 0 ? `${i + 1} / ${ul.length}` : '';
-  b.textContent = x.read_on ? '읽음 취소' : '읽음';
+  const pos = x.read_on ? '오늘 읽음' : i >= 0 ? `${i + 1} / ${ul.length}` : '', label = x.read_on ? '읽음 취소' : '읽음', ps = r.querySelector('.rpos');
+  if (ps.textContent !== pos) ps.textContent = pos;
+  if (b.textContent !== label) b.textContent = label;
   b.classList.toggle('undo', !!x.read_on);
   if (document.activeElement !== m) m.value = x.read_on ? x.memo : RD.drafts[x.rel] || '';
 }
 async function rBody(rel) {
-  let doc = RD.docs.get(rel);
+  const key = rel + '@' + (rItem(rel)?.v || ''), r = $('#reader');   // 노트가 바뀌면(v) 다시 받는다
+  let doc = RD.docs.get(key);
   if (!doc) {
-    doc = await api('/api/read?rel=' + encodeURIComponent(rel)).catch(e => ({ err: e.message }));
-    if (!doc.err) RD.docs.set(rel, doc);
+    doc = await api('/api/read?rel=' + encodeURIComponent(rel)).catch(e => ({ err: e.message, wait: e.wait }));
+    if (!doc.err) RD.docs.set(key, doc);
   }
-  const r = $('#reader'), box = r.querySelector('.rbody');
+  const box = r.querySelector('.rbody');
   if (r.dataset.rel !== rel || !box) return;                          // 그새 다른 글을 열었다
-  if (doc.err) return void (box.innerHTML = `<p class="rwait">본문을 열지 못했어요 · ${esc(doc.err)}</p>`);
+  if (doc.err) return void (box.innerHTML = `<p class="rwait">${doc.wait ? '' : '본문을 열지 못했어요 · '}${esc(doc.err)}</p>`);
   const p = doc.props, row = (k, v) => v ? `<dt>${k}</dt><dd>${v}</dd>` : '';
   box.insertAdjacentHTML('beforebegin', `<dl class="rprops">${row(p.channel ? 'channel' : '', esc(p.channel || ''))}${row('description', esc(dash(p.description || '')))}${row('created', esc(p.created || ''))}${row('source', p.source && /^https?:\/\//.test(p.source) ? `<a class="external-link" href="${esc(p.source)}">${esc(rUrl(p.source))}</a>` : '')}</dl>`);
   box.innerHTML = doc.html;
+  if (PHONE) box.querySelectorAll('img[src^="/api/img"]').forEach(im => {   // 볼트 그림은 아직 맥에만 (웹 그림은 그대로 보인다)
+    const name = decodeURIComponent(im.src.split('name=')[1] || '');
+    im.replaceWith(Object.assign(document.createElement('span'), { className: 'rimg', textContent: '그림 · ' + name + ' (맥·옵시디언에서 보여요)' }));
+  });
   for (const n of [...box.children]) { const w = document.createElement('div'); w.className = 'el-' + n.tagName.toLowerCase(); n.replaceWith(w); w.append(n); }   // 옵시디언처럼 덩어리마다 .el-* (테마의 제목 간격 규칙이 이걸 본다)
   box.querySelectorAll('.callout').forEach(c => {
     const t = c.dataset.callout, ic = c.querySelector(':scope > .callout-title > .callout-icon'), fold = c.querySelector(':scope > .callout-title > .callout-fold');
     if (ic) ic.innerHTML = svg(CALLOUT_ICON[CALLOUT_ALIAS[t] || t] || CALLOUT_ICON.note);
     if (fold) fold.innerHTML = svg('<path d="m6 9 6 6 6-6"/>');
   });
+}
+function rList() {                                                    // 폰: 맥이 보낸 목록 + 아직 맥이 노트에 안 쓴 읽음·메모
+  return (SY.reads || []).map(x => { const m = ROUT[x.rel]; return m ? { ...x, read_on: m.on ? m.day : '', memo: m.on ? m.memo : '' } : x; });
+}
+function rWanted() {                                                  // 폰: 받아 둘 본문 = 안 읽은 글 위에서 24개 + 지금 연 글 (없거나 노트가 바뀐 것, 5분 안에 달라고 한 건 빼고)
+  const L = rList(), want = L.filter(x => !x.read_on).slice(0, 24), open = L.find(x => x.rel === RD.open), now = Date.now();
+  if (open && !want.includes(open)) want.unshift(open);
+  return want.filter(x => (!RDOCS[x.rel] || RDOCS[x.rel].v !== x.v) && now - (SY.rasked[x.rel] || 0) > 300000).map(x => x.rel);
 }
 const rUrl = u => { try { return decodeURI(u); } catch (e) { return u; } };   // 주소의 %EC.. 를 한글로 보이게
 function rOpen(rel) {
@@ -1467,7 +1535,7 @@ if (PHONE) {
   const pull = () => syncPhone().then(phoneRefresh, () => { if (D && !pending() && !saving) state(syncText(D.date)); });
   setInterval(() => {                                                 // 30초마다, 노트를 받는 동안은 3초마다
     if (document.hidden || !SY.code || Date.now() < nextPull) return;
-    nextPull = Date.now() + (SY.receiving ? 3000 : 30000); pull();
+    nextPull = Date.now() + (SY.receiving || Date.now() < (SY.rfast || 0) ? 3000 : 30000); pull();   // 읽을 글 본문을 기다리는 동안(2분)도 3초마다
   }, 1000);
   document.addEventListener('visibilitychange', () => { if (!document.hidden && SY.code) pull(); });
   // 새 버전 안내: version.json 과 다르면 버튼. 누르면 오프라인 보관본을 비우고 새로 받는다

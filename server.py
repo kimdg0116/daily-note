@@ -8,7 +8,7 @@
     python3 server.py          서버만 (127.0.0.1:8749). 폰 연동(sync/Secret.js 가 있으면)도 같이 돈다
     VAULT=<사본 볼트> CLAUDE=<가짜 claude> [SYNC_URL=<가짜 연동 서버>] python3 server.py    시험용 (사본 볼트면 진짜 연동 서버로는 안 보낸다)
 """
-import hashlib, json, os, re, shutil, subprocess, threading, time, unicodedata, urllib.request
+import base64, gzip, hashlib, json, os, re, shutil, subprocess, threading, time, unicodedata, urllib.request
 from datetime import date, timedelta
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs, quote
@@ -554,6 +554,7 @@ SYNC_URL = os.environ.get('SYNC_URL') or 'https://script.google.com/macros/s/AKf
 SYNC_STATE = os.path.join(VAULT, '.daily-sync.json') if os.environ.get('VAULT') else os.path.join(HERE, 'sync', 'state.json')   # 올린 노트의 mtime·받은 수정 확인 (git 제외)
 SYNC = {'at': 0, 'err': ''}
 BATCH_N, BATCH_BYTES = 80, 250_000     # 폰이 노트를 처음 받아 갈 때 한 묶음 (우체통 상자 300KB 안에)
+RPUT_BYTES = 45_000                    # 폰이 달라는 읽을 글 본문을 한 번에 이만큼 (우체통 본문 상자 90KB 안에, 압축 크기)
 SYNC_WAKE = threading.Event()
 
 
@@ -622,11 +623,39 @@ def sync_once(code):
         body['quotes'] = quotes
     if st.get('ph') != ph:
         body['plans'] = plans
+    # 읽을 글: 목록·테마는 바뀔 때만, 본문은 폰이 달라는 것만 (압축 크기로 RPUT_BYTES 까지), 폰에서 누른 읽음을 노트에 쓴 확인
+    reads, theme = read_items(), theme_css()
+    rh, th = (hashlib.sha1(json.dumps(x, ensure_ascii=False).encode()).hexdigest() for x in (reads, theme))
+    if st.get('rh') != rh:
+        body['reads'] = reads
+    if st.get('th') != th:
+        body['theme'] = theme
+    rput, rqdone, size = {}, [], 0
+    for rel in st.get('rq') or []:
+        try:
+            doc = read_doc(rel)
+        except (OSError, ValueError, yaml.YAMLError):
+            rqdone.append(rel)                    # 없는 노트는 요청에서 뺀다
+            continue
+        n = len(base64.b64encode(gzip.compress(json.dumps(doc, ensure_ascii=False).encode())))
+        if rput and size + n > RPUT_BYTES:
+            break
+        rput[hashlib.sha1(doc['rel'].encode()).hexdigest()[:12]] = doc
+        rqdone.append(rel)
+        size += n
+    body.update(rput=rput, rqdone=rqdone, rdone=st.get('rdone', []))
     r = sync_post(body)
     if r.get('err'):
         raise RuntimeError('연결 코드가 맞지 않아요' if r['err'] == 'code' else r['err'])
     up.update({d: mt[d] for d in put})
-    st.update(done=[], pdone=[], dh=dh, mh=mh, qh=qh, ph=ph, want=r.get('want'))
+    st.update(done=[], pdone=[], dh=dh, mh=mh, qh=qh, ph=ph, want=r.get('want'), rh=rh, th=th, rdone=[],
+              rq=[x for x in (r.get('rq') or []) if isinstance(x, str)][:60])
+    for rel, m in (r.get('rob') or {}).items():                         # 폰에서 누른 읽음 → 노트에, 다음 번에 받았다고 알린다
+        try:
+            read_mark(rel, bool(m.get('on')), str(m.get('memo') or ''), m.get('day'))
+        except (OSError, ValueError) as e:
+            print('폰 읽음 못 씀:', rel, e, flush=True)             # 없는 노트 등은 확인만 하고 버린다
+        st['rdone'].append([rel, m.get('t')])
     po = [o for o in (r.get('po') or []) if isinstance(o, dict)]      # 폰에서 바꾼 일정 → 일정 노트, 다음 번에 받았다고 알린다
     if po:
         plan_apply(po)
@@ -648,7 +677,7 @@ def sync_once(code):
         st['done'] += [[d] + a for a in acks]
     save_json(SYNC_STATE, st)
     # 곧바로 한 번 더: 볼트에 쓴 걸 올리고 받았다고 알릴 때, 바뀐 노트가 남았을 때, 폰이 노트를 받아 가는 중일 때
-    return bool(st['done']) or bool(st['pdone']) or len(changed) == 40 or bool(st['want'])
+    return bool(st['done']) or bool(st['pdone']) or len(changed) == 40 or bool(st['want']) or bool(st['rq']) or bool(st['rdone'])
 
 
 def save_json(p, data):
@@ -706,7 +735,7 @@ def read_group(folder, f):
 READ_CACHE = {}                       # 파일 경로 → (mtime, 항목 또는 None). 볼트 노트 1000개를 매번 읽지 않게
 
 
-def read_item(p, folder, fn):
+def read_item(p, folder, fn, mt):
     fm, body = split(open(p, encoding='utf-8').read())
     if not re.search(r'^type:\s*["\']?(note|literature)["\']?\s*$', fm, re.M):
         return None
@@ -722,7 +751,7 @@ def read_item(p, folder, fn):
             'tag': str(f.get('channel') or last) if g == 'clip' else last,
             'desc': str(f.get('description') or ''), 'created': str(f.get('created') or '')[:10],
             'read_on': ro, 'memo': str(f.get('memo') or '') if ro else '',
-            'min': max(1, round(len(body) / 500))}               # 한글 1분에 500자쯤
+            'min': max(1, round(len(body) / 500)), 'v': int(mt)}  # 한글 1분에 500자쯤 · v = 노트가 바뀌면 폰이 본문을 다시 받는다
 
 
 def read_items():
@@ -738,7 +767,7 @@ def read_items():
             try:
                 mt = os.path.getmtime(p)
                 if READ_CACHE.get(p, (None,))[0] != mt:
-                    READ_CACHE[p] = (mt, read_item(p, folder, fn))
+                    READ_CACHE[p] = (mt, read_item(p, folder, fn, mt))
             except (OSError, UnicodeDecodeError):
                 continue
             it = READ_CACHE[p][1]
@@ -811,19 +840,20 @@ def read_lines_set(lines, title, memo):
     return lines[:h + 1] + items + lines[end:]
 
 
-def read_mark(rel, on, memo):
+def read_mark(rel, on, memo, d=None):
+    """d = 읽은 날 (폰에서 누른 날. 맥이 늦게 받아도 그날로). 없으면 오늘"""
     p = vault_md(rel)
     memo = ' '.join(str(memo or '').split())[:300]
+    d = day(d) if d and real_date(str(d)) and day(d) <= date.today() else date.today()
     with FILE_LOCK:
         fm, body = split(open(p, encoding='utf-8').read())
         if on:
-            fm = fm_set(fm, 'read_on', date.today())
+            fm = fm_set(fm, 'read_on', d)
             fm = fm_set(fm, 'memo', memo) if memo else fm_del(fm, 'memo')
         else:                                      # Home 체크를 풀 때처럼 read_on 은 빈 값으로 남긴다
             fm = fm_del(fm_set(fm, 'read_on', None), 'memo')
         write(p, f'---\n{fm}\n---\n{body}')
-    d = date.today()
-    if on and not os.path.exists(path(d)):         # 오늘 노트가 없으면 데일리 템플릿으로 만든다 (쓰기 시작할 때와 같이)
+    if on and not os.path.exists(path(d)):         # 그날 노트가 없으면 데일리 템플릿으로 만든다 (쓰기 시작할 때와 같이)
         created, _ = save_day(d, {}, {})
         if created:
             start_quote(d.isoformat())
@@ -907,7 +937,7 @@ def read_doc(rel):
     if MD is None:
         raise ValueError('이 맥의 파이썬에 markdown-it-py 가 없어요')
     body = re.sub(r'%%.*?%%', '', body, flags=re.S)
-    return {'rel': nfc(rel), 'html': md_blocks(body.split('\n')),
+    return {'rel': nfc(rel), 'v': int(os.path.getmtime(p)), 'html': md_blocks(body.split('\n')),
             'props': {k: str(f[k])[:10] if k == 'created' else str(f[k]) for k in ('channel', 'description', 'created', 'source') if f.get(k)}}
 
 

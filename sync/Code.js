@@ -16,14 +16,18 @@
  * 위젯 → {code, op:'widget', today, yday}   → {today:{today?, tomorrow?}|null, yday:…}   할 일 칸만, 읽기만
  * 폰 → {code, op:'edit', date, fm, sec, t}  → {ok}       fm/sec = {키: {v: 새 값, b: 폰이 본 값}}
  * 폰 → {code, op:'plan', ops}             → {ok}       일정 바꾸기 [{id, act:'add'|'toggle', d, n, on?}] (맥이 일정 노트에 쓴다)
- * 맥 → {code, op:'mac', put, keep?, done, pdone?, resync?, dates?, mind?, quotes?, plans?} → {ob, want, po}
+ * 폰 → {code, op:'rwant', rels}            → {ok}       읽을 글 본문을 달라고 (맥이 다음에 들를 때 rb 상자에 넣는다)
+ * 폰 → {code, op:'rmark', marks}           → {ok}       읽음·메모·되돌리기 [{rel, on, memo, day, t}] (같은 글은 나중 것만, 맥이 노트에 쓴다)
+ * 맥 → {code, op:'mac', put, keep?, done, pdone?, resync?, dates?, mind?, quotes?, plans?, reads?, theme?, rput?, rqdone?, rdone?} → {ob, want, po, rq, rob}
  *        quotes = 명언 모음 {list, favs}, plans = 일정 [{d, n, x}], po = 아직 맥이 안 쓴 일정 바꾸기, pdone = 맥이 쓴 것의 id
  *        resync = {to: 이번 묶음 마지막 날짜, done: 끝인지}, done = [[날짜, 'fm'|'sec', 키, t]]
+ *        reads = 읽을 글 목록, theme = 옵시디언 테마 CSS, rput = {id: 본문}, rqdone = 넣은(또는 없는) 글, rdone = [[rel, t]] 맥이 노트에 쓴 읽음
+ * 읽을 글 본문은 노트 상자와 따로 rb 상자(RBOX)에 둔다. 넘치면 오래된 것부터 버리고, 못 받은 폰은 다시 달라고 한다
  *
  * 반영: cd sync && ~/Code/apps/dosimetrist-calendar-server/tools/node_modules/.bin/clasp push -f
  *       && …/clasp redeploy <배포 ID>   (배포 ID 는 server.py·index.html 의 SYNC_URL, URL 유지)
  */
-const CH = 8000, BOX = 300000;                               // 상자 한도 (전체 저장 한도 500KB 중)
+const CH = 8000, BOX = 280000, RBOX = 90000;                 // 노트 상자 · 읽을 글 본문 상자 한도 (전체 저장 한도 500KB 안에 목록·테마까지)
 let ALL, W, DEL;                                             // 요청마다: 다 읽어 두고, 쓸 것·지울 것을 모아 한 번에
 
 function doPost(e) {
@@ -54,7 +58,11 @@ const OPS = {
     if (since && (meta.floor || 0) > since) r.stale = true;   // 그사이 상자에서 버린 노트가 있다 → 처음부터 다시
     for (const d in bi) if (bi[d][0] > since) r.docs[d] = getJ_('b:' + d);
     for (const d in ob) r.wait[d] = pending_(ob[d]);
-    if ((meta.mrev || 0) > since || q.meta) { r.dates = meta.dates || []; r.mind = meta.mind || []; r.quotes = meta.quotes || null; r.plans = meta.plans || null; }   // meta = 놓친 폰이 다시 달라고
+    if ((meta.mrev || 0) > since || q.meta) { r.dates = meta.dates || []; r.mind = meta.mind || []; r.quotes = meta.quotes || null; r.plans = meta.plans || null; r.reads = meta.reads || null; r.theme = meta.theme || null; }   // meta = 놓친 폰이 다시 달라고
+    const ri = getJ_('ri') || {};
+    r.rdocs = {};
+    for (const id in ri) if (ri[id][0] > since) r.rdocs[ri[id][2]] = getJ_('rb:' + id);
+    r.rwait = Object.keys(getJ_('rob') || {});              // 아직 맥이 노트에 안 쓴 읽음
     r.pwait = (getJ_('po') || []).map(o => o.id);
     const want = getJ_('want');
     if (want) {
@@ -94,6 +102,21 @@ const OPS = {
     return { ok: true };
   },
 
+  rwant(q) {                                                 // 폰이 달라는 읽을 글 본문 (맥이 넣으면 rqdone 으로 지운다)
+    const rq = getJ_('rq') || [];
+    for (const rel of q.rels || []) if (typeof rel === 'string' && rel && !rq.includes(rel)) rq.push(rel);
+    setJ_('rq', rq.slice(-60));
+    return { ok: true };
+  },
+
+  rmark(q) {                                                 // 폰에서 누른 읽음·메모·되돌리기. 같은 글은 나중 것만
+    const rob = getJ_('rob') || {};
+    for (const m of q.marks || []) if (m && typeof m.rel === 'string' && m.rel)
+      rob[m.rel] = { on: !!m.on, memo: String(m.memo || '').slice(0, 300), day: String(m.day || ''), t: +m.t || Date.now() };
+    setJ_('rob', rob);
+    return { ok: true };
+  },
+
   plan(q) {                                                  // 폰에서 바꾼 일정. 같은 id 는 한 번만
     const po = getJ_('po') || [];
     for (const o of q.ops || []) if (o && o.id && !po.some(x => x.id === o.id)) po.push(o);
@@ -103,14 +126,26 @@ const OPS = {
 
   mac(q) {
     const ob = getJ_('ob') || {}, bi = getJ_('bi') || {}, meta = getJ_('meta') || {}, put = q.put || {};
-    let rev = +ALL.rev || 0, want = getJ_('want'), po = getJ_('po') || [];
+    let rev = +ALL.rev || 0, want = getJ_('want'), po = getJ_('po') || [], rq = getJ_('rq') || [], rob = getJ_('rob') || {};
+    const rput = q.rput || {};
+    if ((q.rqdone || []).length) { rq = rq.filter(x => !q.rqdone.includes(x)); setJ_('rq', rq.length ? rq : null); }
+    if ((q.rdone || []).length) {                            // 맥이 노트에 쓴 읽음 (그 사이 폰이 또 눌렀으면 남긴다)
+      for (const [rel, t] of q.rdone) if (rob[rel] && rob[rel].t === t) delete rob[rel];
+      setJ_('rob', Object.keys(rob).length ? rob : null);
+    }
     if ((q.pdone || []).length) { po = po.filter(o => !q.pdone.includes(o.id)); setJ_('po', po.length ? po : null); }   // 맥이 일정 노트에 쓴 것
     for (const [d, part, k, t] of q.done || []) {           // 맥이 볼트에 쓴 것 (그 사이 폰이 또 고쳤으면 남긴다)
       const e = ob[d] && ob[d][part] && ob[d][part][k];
       if (e && e.t === t) delete ob[d][part][k];
       if (ob[d] && !pending_(ob[d])) delete ob[d];
     }
-    if (Object.keys(put).length || q.dates || q.mind || q.quotes || q.plans) rev++;
+    if (Object.keys(put).length || q.dates || q.mind || q.quotes || q.plans || q.reads || q.theme != null || Object.keys(rput).length) rev++;
+    if (Object.keys(rput).length) {
+      const ri = getJ_('ri') || {};
+      for (const id in rput) ri[id] = [rev, setJ_('rb:' + id, rput[id]), rput[id].rel];
+      fitR_(ri);
+      setJ_('ri', ri);
+    }
     for (const d in put) {
       const o = ob[d];
       if (o) for (const part of ['fm', 'sec']) for (const k in o[part]) put[d][part][k] = o[part][k].v;   // 아직 볼트에 안 쓴 폰 수정은 위에 얹는다
@@ -121,12 +156,14 @@ const OPS = {
     if (q.mind) { meta.mind = q.mind; meta.mrev = rev; }
     if (q.quotes) { meta.quotes = q.quotes; meta.mrev = rev; }
     if (q.plans) { meta.plans = q.plans; meta.mrev = rev; }
+    if (q.reads) { meta.reads = q.reads; meta.mrev = rev; }
+    if (q.theme != null) { meta.theme = q.theme; meta.mrev = rev; }
     meta.macAt = Date.now();
     setJ_('ob', ob);
     if (Object.keys(put).length) { fit_(bi, meta); setJ_('bi', bi); }
     setJ_('meta', meta);
     W.rev = String(rev);
-    return { ob, want, po };
+    return { ob, want, po, rq, rob };
   },
 };
 
@@ -138,6 +175,12 @@ function fit_(bi, meta) {                                     // 상자가 넘�
     meta.floor = Math.max(meta.floor || 0, bi[d][0]); total -= bi[d][1];
     setJ_('b:' + d, null); delete bi[d];
   }
+}
+
+function fitR_(ri) {                                          // 읽을 글 본문 상자가 넘치면 오래된 것부터 (못 받은 폰은 다시 달라고 한다)
+  const order = Object.keys(ri).sort((a, b) => ri[a][0] - ri[b][0]);
+  let total = order.reduce((n, id) => n + ri[id][1], 0);
+  while (total > RBOX && order.length > 1) { const id = order.shift(); total -= ri[id][1]; setJ_('rb:' + id, null); delete ri[id]; }
 }
 
 function out_(o) { return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON); }

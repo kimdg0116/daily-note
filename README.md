@@ -29,7 +29,7 @@
 - 모양: 볼트의 옵시디언 테마(`.obsidian/appearance.json` 의 cssTheme = Ink Paper)를 `/api/theme.css` 가 `.ink` 안에만 걸리게 바꿔서 그대로 쓴다. 테마를 고치면 앱도 같이 바뀐다. 앱이 라이트면 테마의 라이트, 다크면 다크.
 - `[[링크]]` 는 읽을 글 목록에 있으면 앱에서, 없으면 옵시디언에서 연다. 웹 링크는 기본 브라우저로 (`/api/openurl`).
 - 넓은 창(900 이상)은 왼쪽 목록 · 오른쪽 본문, 좁으면 본문이 목록 위로 밀려 들어오고 뒤로 가면 보던 자리 그대로.
-- 폰: 아직 맥과 잇지 않았다 (READING 을 고르면 안내만). 다음 단계에서 우체통으로 목록·본문·읽음을 주고받는다.
+- 폰: 맥이 우체통으로 목록(바뀔 때만)과 테마를 보내고, 본문은 폰이 달라는 것만 보낸다 (안 읽은 글 위에서 24개 + 연 글, 한 번에 압축 45KB 까지, 우체통 본문 상자 90KB). 폰은 받은 본문을 IndexedDB `rdocs` 에 두고 목록에서 빠지면 지운다. 노트가 바뀌면(v = mtime) 다시 받는다. 없는 본문을 열면 그 글부터 달라고 하고 2분 동안 3초마다 받는다. 폰에서 누른 읽음·메모는 `rmark` 로 우체통 편지함(rob)에 → 맥이 누른 날 기준으로 노트에 쓰고 rdone 으로 알린다. 그때까지는 폰 목록에 얹어 둔다. 볼트 그림(첨부파일)은 폰에 안 보내서 안내 줄로 보이고, 웹 그림은 그대로 보인다.
 
 ## 폰 앱 · 연동
 - 폰 앱 = 같은 `index.html` 을 GitHub Pages(`kimdg0116/daily-note`)로 띄운 홈 화면 앱. https 로 열리면 폰 모드가 된다 (manifest·sw.js·version.json, 앱 버전은 `APP_VERSION`·`sw.js`·`version.json` 세 곳 같이).
@@ -50,5 +50,5 @@
 - 색은 도시메트리 캘린더 widget.js 와 같은 16색(PALETTES). 앱 '위젯 색 맞추기' → `scriptable:///run/daily-note-widget-core?color=<id>`.
 - 미리보기: Scriptable 흉내 페이지에 widget.js 를 그대로 넣어 돌려 본다 (실기기 확인은 폰에서).
 
-확인: `python3 test_note.py` (템플릿 렌더·칸 읽고 쓰기·명언 칸·마음 기록 양식·폰 수정 고르기·읽을 글 줄과 본문 HTML), `node sync/test_sync.mjs` (우체통)
+확인: `python3 test_note.py` (템플릿 렌더·칸 읽고 쓰기·명언 칸·마음 기록 양식·폰 수정 고르기·읽을 글 줄과 본문 HTML), `node sync/test_sync.mjs` (우체통, 읽을 글 본문 상자·요청·읽음 편지함 포함)
 시험: `PORT=8750 VAULT=<사본 볼트> CLAUDE=<가짜 claude> [SYNC_URL=http://127.0.0.1:8751] python3 server.py` 로 실제 볼트를 건드리지 않고 돌려 볼 수 있다.
