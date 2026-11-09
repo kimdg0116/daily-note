@@ -200,7 +200,7 @@ def quote_get(lines):
 
 # ── 명언 모음: 모으기를 켠 명언(토글 전 노트는 전부) + 별(📜 명언 모음 노트의 favorites) ──
 
-MOC = os.path.join(VAULT, '04 Life', '📜 명언 모음.md')
+MOC = os.path.join(VAULT, '04 Life', '명언', '📜 명언 모음.md')   # 2026-10-23 볼트 정리로 명언 폴더 안으로 옮겨짐
 FAV = '_fav'                          # 폰에서 별을 바꾸면 그 날짜 수정에 이 키로 실려 온다 (노트에는 안 씀)
 
 
