@@ -6,7 +6,7 @@
 <title>DAILY</title>
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<!-- 상태 막대 태그는 넣지 않는다: iOS 26 에서 black-translucent 는 위(다이나믹 아일랜드 아래)를 흐리게 덮고 바닥 62pt 를 비운다. 막대는 맨 위 고정 띠(.sbar) 색을 따른다 -->
 <meta name="apple-mobile-web-app-title" content="데일리">
 <meta name="theme-color" content="#e3eeff" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#142039" media="(prefers-color-scheme: dark)">
@@ -418,7 +418,7 @@ function api(u, body) {
 /* ── 폰: 맥 서버 대신 동기화 서버(Apps Script, sync/Code.js)를 우체통으로 쓴다.
    우체통은 오가는 것만 잠깐 들고, 노트 사본은 폰 안(IndexedDB)에 전부 둔다. 처음 연결하면 맥이 모든 노트를 나눠 보내고,
    그 뒤로는 바뀐 노트만 온다. 고친 칸은 보내 두면 맥이 볼트에 쓴다 ── */
-const APP_VERSION = '26.11.09-1';                                     // 올릴 때마다 version.json · sw.js 와 같이 올린다
+const APP_VERSION = '26.11.09-2';                                     // 올릴 때마다 version.json · sw.js 와 같이 올린다
 const LOCAL = /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
 const PHONE = location.protocol === 'https:' || (LOCAL && location.search.includes('phone'));   // ?phone = 맥에서 폰 화면 시험
 // 맥에서 폰 화면을 시험할 때는 늘 가짜 연동 서버(node sync/test_sync.mjs --serve)로만 — 진짜 노트에 시험 글이 섞이지 않게
