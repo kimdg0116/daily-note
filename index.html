@@ -113,6 +113,9 @@ button { font-family:inherit; cursor:pointer; }
 @font-face { font-family:"SUIT Variable"; src:url(https://cdn.jsdelivr.net/gh/sun-typeface/SUIT@2.0.5/fonts/variable/woff2/SUIT-Variable.woff2) format("woff2-variations"); font-weight:100 900; font-display:block; }
 
 /* 상단 바 */
+/* iOS 26 홈 화면 앱은 맨 위 position:fixed 요소의 색으로 상태 막대를 잇고, 없으면(sticky 만 있으면) 막대 아래 제목 줄을 흐리게 덮는다.
+   위 막대와 같은 색의 고정 띠를 위 막대 윗여백 안에만 깐다 */
+.sbar { position:fixed; top:0; left:0; right:0; z-index:21; height:calc(12px + env(safe-area-inset-top, 0px)); background:var(--bg-top); }
 .top { position:sticky; top:0; z-index:20; display:flex; align-items:center; gap:10px;
   margin:0 calc(-1 * var(--gut)) 14px; padding:calc(12px + env(safe-area-inset-top, 0px)) var(--gut) 12px;
   background:var(--bg-top); color:var(--bar-fg); }
@@ -348,6 +351,7 @@ footer { margin-top:24px; }
 </style>
 </head>
 <body>
+<div class="sbar" aria-hidden="true"></div>
 <div class="top">
   <span class="brand">DAILY</span>
   <button type="button" class="icon-btn" id="prev" aria-label="전날"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 6-6 6 6 6"/></svg></button>
@@ -414,7 +418,7 @@ function api(u, body) {
 /* ── 폰: 맥 서버 대신 동기화 서버(Apps Script, sync/Code.js)를 우체통으로 쓴다.
    우체통은 오가는 것만 잠깐 들고, 노트 사본은 폰 안(IndexedDB)에 전부 둔다. 처음 연결하면 맥이 모든 노트를 나눠 보내고,
    그 뒤로는 바뀐 노트만 온다. 고친 칸은 보내 두면 맥이 볼트에 쓴다 ── */
-const APP_VERSION = '26.11.06-6';                                     // 올릴 때마다 version.json · sw.js 와 같이 올린다
+const APP_VERSION = '26.11.09-1';                                     // 올릴 때마다 version.json · sw.js 와 같이 올린다
 const LOCAL = /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
 const PHONE = location.protocol === 'https:' || (LOCAL && location.search.includes('phone'));   // ?phone = 맥에서 폰 화면 시험
 // 맥에서 폰 화면을 시험할 때는 늘 가짜 연동 서버(node sync/test_sync.mjs --serve)로만 — 진짜 노트에 시험 글이 섞이지 않게
