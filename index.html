@@ -6,7 +6,7 @@
 <title>DAILY</title>
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<!-- 상태 막대 태그는 넣지 않는다: iOS 26 에서 black-translucent 는 위(다이나믹 아일랜드 아래)를 흐리게 덮고 바닥 62pt 를 비운다. 막대는 맨 위 고정 띠(.sbar) 색을 따른다 -->
+<!-- 상태 막대 태그는 넣지 않는다. iOS 상태 막대와 이어지는 상단 바 전체를 불투명한 fixed 요소로 둔다. -->
 <meta name="apple-mobile-web-app-title" content="데일리">
 <meta name="theme-color" content="#e3eeff" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#142039" media="(prefers-color-scheme: dark)">
@@ -113,11 +113,12 @@ button { font-family:inherit; cursor:pointer; }
 @font-face { font-family:"SUIT Variable"; src:url(https://cdn.jsdelivr.net/gh/sun-typeface/SUIT@2.0.5/fonts/variable/woff2/SUIT-Variable.woff2) format("woff2-variations"); font-weight:100 900; font-display:block; }
 
 /* 상단 바 */
-/* iOS 26 홈 화면 앱은 맨 위 position:fixed 요소의 색으로 상태 막대를 잇고, 없으면(sticky 만 있으면) 막대 아래 제목 줄을 흐리게 덮는다.
-   위 막대와 같은 색의 고정 띠를 위 막대 윗여백 안에만 깐다 */
-.sbar { position:fixed; top:0; left:0; right:0; z-index:21; height:calc(12px + env(safe-area-inset-top, 0px)); background:var(--bg-top); }
-.top { position:sticky; top:0; z-index:20; display:flex; align-items:center; gap:10px;
-  margin:0 calc(-1 * var(--gut)) 14px; padding:calc(12px + env(safe-area-inset-top, 0px)) var(--gut) 12px;
+/* 얇은 배경 띠만으로는 실기기 흐림이 남았다. 제목과 버튼까지 불투명한 고정 바 하나에 넣는다.
+   버튼 32px + 위아래 여백 24px + 안전 영역. 본문은 기존처럼 문서에서 스크롤한다. */
+body { padding-top:calc(70px + env(safe-area-inset-top, 0px)); }
+html { scroll-padding-top:calc(70px + env(safe-area-inset-top, 0px)); }
+.top { position:fixed; top:0; left:0; right:0; z-index:20; display:flex; align-items:center; gap:10px;
+  height:calc(56px + env(safe-area-inset-top, 0px)); margin:0; padding:calc(12px + env(safe-area-inset-top, 0px)) var(--gut) 12px;
   background:var(--bg-top); color:var(--bar-fg); }
 .brand { flex:1; min-width:0; padding:0; border:0; background:none; color:inherit; text-align:left; font-family:Oswald, sans-serif; font-weight:700; font-size:19px; letter-spacing:.1em; line-height:1.05; }
 .icon-btn { flex:none; display:grid; place-items:center; width:36px; height:32px; padding:0; font-size:15px; line-height:1; border:1px solid var(--line); border-radius:999px; background:var(--card); color:var(--acc); }
@@ -129,7 +130,7 @@ button { font-family:inherit; cursor:pointer; }
 /* SUIT 의 화살표(→ ↑)는 대가 없는 꺾쇠 모양이라 화살표만 시스템 글꼴로 */
 @font-face { font-family:"Arrows"; src:local("Apple SD Gothic Neo"), local("AppleSDGothicNeo-Regular"), local("Helvetica Neue"), local("HelveticaNeue"); unicode-range:U+2190-21FF, U+2794, U+27A1, U+2B05-2B07; }
 :root { --font-body:"Arrows", "SUIT Variable", "Apple SD Gothic Neo", sans-serif; }
-.top { gap:6px; background:var(--bar); -webkit-backdrop-filter:saturate(1.4) blur(14px); backdrop-filter:saturate(1.4) blur(14px); }
+.top { gap:6px; }
 .brand { flex:none; margin-right:auto; }
 .datebtn { display:flex; align-items:center; gap:7px; height:32px; padding:0 12px; font-family:var(--num); font-size:15px; font-weight:600; border:1px solid var(--line); border-radius:999px; background:var(--card); color:var(--fg); }
 .datebtn svg { width:16px; height:16px; color:var(--acc); }
@@ -351,7 +352,6 @@ footer { margin-top:24px; }
 </style>
 </head>
 <body>
-<div class="sbar" aria-hidden="true"></div>
 <div class="top">
   <span class="brand">DAILY</span>
   <button type="button" class="icon-btn" id="prev" aria-label="전날"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 6-6 6 6 6"/></svg></button>
@@ -418,7 +418,7 @@ function api(u, body) {
 /* ── 폰: 맥 서버 대신 동기화 서버(Apps Script, sync/Code.js)를 우체통으로 쓴다.
    우체통은 오가는 것만 잠깐 들고, 노트 사본은 폰 안(IndexedDB)에 전부 둔다. 처음 연결하면 맥이 모든 노트를 나눠 보내고,
    그 뒤로는 바뀐 노트만 온다. 고친 칸은 보내 두면 맥이 볼트에 쓴다 ── */
-const APP_VERSION = '26.11.09-2';                                     // 올릴 때마다 version.json · sw.js 와 같이 올린다
+const APP_VERSION = '26.11.09-3';                                     // 올릴 때마다 version.json · sw.js 와 같이 올린다
 const LOCAL = /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
 const PHONE = location.protocol === 'https:' || (LOCAL && location.search.includes('phone'));   // ?phone = 맥에서 폰 화면 시험
 // 맥에서 폰 화면을 시험할 때는 늘 가짜 연동 서버(node sync/test_sync.mjs --serve)로만 — 진짜 노트에 시험 글이 섞이지 않게
