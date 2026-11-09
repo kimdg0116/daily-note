@@ -156,6 +156,15 @@ html { scroll-padding-top:calc(70px + env(safe-area-inset-top, 0px)); }
 .dgroup .dside svg { width:18px; height:18px; }
 .dgroup .datebtn { flex:1; min-width:0; justify-content:center; height:auto; padding:0 8px; border-width:0 1px; border-radius:0; white-space:nowrap; }
 .daterow .pill { height:38px; padding:0 16px; border-radius:12px; font-size:14px; }
+/* 넓은 화면(맥 창·아이패드, 폭 600 이상)은 위 막대에 자리가 남아서 날짜 줄을 막대 가운데에 올린다.
+   마크업은 그대로 두고 고정 위치만 바꾼다 (막대 단추 높이 32 에 맞춤). 폰은 제목 아래 한 줄 그대로 */
+@media (min-width:600px) {
+  .daterow { position:fixed; top:calc(12px + env(safe-area-inset-top, 0px)); left:50%; z-index:21; margin:0; transform:translateX(-50%); }
+  .dgroup { flex:none; height:32px; border-radius:10px; }
+  .dgroup .dside { width:36px; }
+  .dgroup .datebtn { padding:0 12px; }
+  .daterow .pill { height:32px; border-radius:10px; }
+}
 
 /* ── READING: 읽을 글 목록 + 노트 본문. 넓으면(900 이상) 왼쪽 목록 · 오른쪽 본문, 좁으면 본문이 목록 위로 밀려 들어온다 ── */
 body.reading { --gut:max(16px, calc((100vw - 1080px) / 2)); }
@@ -562,7 +571,7 @@ function api(u, body) {
 /* ── 폰: 맥 서버 대신 동기화 서버(Apps Script, sync/Code.js)를 우체통으로 쓴다.
    우체통은 오가는 것만 잠깐 들고, 노트 사본은 폰 안(IndexedDB)에 전부 둔다. 처음 연결하면 맥이 모든 노트를 나눠 보내고,
    그 뒤로는 바뀐 노트만 온다. 고친 칸은 보내 두면 맥이 볼트에 쓴다 ── */
-const APP_VERSION = '26.11.09-6';                                     // 올릴 때마다 version.json · sw.js 와 같이 올린다
+const APP_VERSION = '26.11.10-1';                                     // 올릴 때마다 version.json · sw.js 와 같이 올린다
 const LOCAL = /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
 const PHONE = location.protocol === 'https:' || (LOCAL && location.search.includes('phone'));   // ?phone = 맥에서 폰 화면 시험
 // 맥에서 폰 화면을 시험할 때는 늘 가짜 연동 서버(node sync/test_sync.mjs --serve)로만 — 진짜 노트에 시험 글이 섞이지 않게
