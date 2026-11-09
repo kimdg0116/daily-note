@@ -562,7 +562,7 @@ function api(u, body) {
 /* ── 폰: 맥 서버 대신 동기화 서버(Apps Script, sync/Code.js)를 우체통으로 쓴다.
    우체통은 오가는 것만 잠깐 들고, 노트 사본은 폰 안(IndexedDB)에 전부 둔다. 처음 연결하면 맥이 모든 노트를 나눠 보내고,
    그 뒤로는 바뀐 노트만 온다. 고친 칸은 보내 두면 맥이 볼트에 쓴다 ── */
-const APP_VERSION = '26.11.09-5';                                     // 올릴 때마다 version.json · sw.js 와 같이 올린다
+const APP_VERSION = '26.11.09-6';                                     // 올릴 때마다 version.json · sw.js 와 같이 올린다
 const LOCAL = /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
 const PHONE = location.protocol === 'https:' || (LOCAL && location.search.includes('phone'));   // ?phone = 맥에서 폰 화면 시험
 // 맥에서 폰 화면을 시험할 때는 늘 가짜 연동 서버(node sync/test_sync.mjs --serve)로만 — 진짜 노트에 시험 글이 섞이지 않게
@@ -571,14 +571,15 @@ if (PHONE) document.documentElement.classList.add('phone');
 // SY = 연결 상태(작은 것, localStorage), DOCS = 노트 사본 전부(IndexedDB, 기한·용량 걱정 없음), OUT = 아직 못 보낸 폰 수정
 // PO = 폰에서 바꾼 일정 (보냈어도 맥이 일정 노트에 쓸 때까지 화면에 얹는다)
 // ROUT = 폰에서 누른 읽음·메모 (보냈어도 맥이 노트에 쓸 때까지 목록에 얹는다), RDOCS = 받아 둔 읽을 글 본문 (IndexedDB rdocs)
-let SY = {}, OUT = {}, DOCS = {}, PO = [], ROUT = {}, RDOCS = {};
+// RIMGS = 받아 둔 볼트 그림 (이름 → data URL, IndexedDB rimgs)
+let SY = {}, OUT = {}, DOCS = {}, PO = [], ROUT = {}, RDOCS = {}, RIMGS = {};
 try { SY = JSON.parse(localStorage.getItem('dn.sync')) || {}; OUT = JSON.parse(localStorage.getItem('dn.out')) || {}; PO = JSON.parse(localStorage.getItem('dn.plan')) || []; ROUT = JSON.parse(localStorage.getItem('dn.read')) || {}; } catch (e) {}
-delete SY.docs; delete SY.seen; SY.rasked = SY.rasked || {};                                       // 예전(localStorage 에 노트 보관) 흔적
+delete SY.docs; delete SY.seen; SY.rasked = SY.rasked || {}; SY.iasked = SY.iasked || {};                                       // 예전(localStorage 에 노트 보관) 흔적
 function keepSY() { try { localStorage.setItem('dn.sync', JSON.stringify(SY)); localStorage.setItem('dn.out', JSON.stringify(OUT)); localStorage.setItem('dn.plan', JSON.stringify(PO)); localStorage.setItem('dn.read', JSON.stringify(ROUT)); } catch (e) {} }
 const idb = new Promise(ok => {                                       // 폰 안 노트 보관함
   if (!PHONE || !window.indexedDB) return ok(null);
-  const q = indexedDB.open('daily-note', 2);                          // 2 = 읽을 글 본문(rdocs) 칸을 더했다
-  q.onupgradeneeded = () => { for (const n of ['docs', 'rdocs']) if (!q.result.objectStoreNames.contains(n)) q.result.createObjectStore(n); };
+  const q = indexedDB.open('daily-note', 3);                          // 2 = 읽을 글 본문(rdocs), 3 = 그 본문의 그림(rimgs)
+  q.onupgradeneeded = () => { for (const n of ['docs', 'rdocs', 'rimgs']) if (!q.result.objectStoreNames.contains(n)) q.result.createObjectStore(n); };
   q.onsuccess = () => ok(q.result); q.onerror = () => ok(null);
 });
 const ready = idb.then(db => db && new Promise(ok => {
@@ -586,11 +587,17 @@ const ready = idb.then(db => db && new Promise(ok => {
   q.onsuccess = () => { const c = q.result; if (c) { DOCS[c.key] = c.value; c.continue(); } else ok(); };
   q.onerror = () => ok();
 }));
-const rready = idb.then(db => db && new Promise(ok => {
-  const q = db.transaction('rdocs').objectStore('rdocs').openCursor();
-  q.onsuccess = () => { const c = q.result; if (c) { RDOCS[c.key] = c.value; c.continue(); } else ok(); };
+const loadStore = (db, name, into) => new Promise(ok => {
+  const q = db.transaction(name).objectStore(name).openCursor();
+  q.onsuccess = () => { const c = q.result; if (c) { into[c.key] = c.value; c.continue(); } else ok(); };
   q.onerror = () => ok();
-}));
+});
+const rready = idb.then(db => db && Promise.all([loadStore(db, 'rdocs', RDOCS), loadStore(db, 'rimgs', RIMGS)]));
+function saveRimgs(imgs, drop = []) {
+  Object.assign(RIMGS, imgs); drop.forEach(k => delete RIMGS[k]);
+  idb.then(db => { if (!db) return; const st = db.transaction('rimgs', 'readwrite').objectStore('rimgs'); for (const k in imgs) st.put(imgs[k], k); drop.forEach(k => st.delete(k)); });
+}
+const imgNames = html => [...new Set([...String(html).matchAll(/\/api\/img\?name=([^"&]+)/g)].map(m => decodeURIComponent(m[1])))];
 function saveRdocs(docs, drop = []) {                                 // 받은 본문은 넣고, 목록에서 빠진 글의 본문은 지운다
   Object.assign(RDOCS, docs); drop.forEach(k => delete RDOCS[k]);
   idb.then(db => { if (!db) return; const st = db.transaction('rdocs', 'readwrite').objectStore('rdocs'); for (const k in docs) st.put(docs[k], k); drop.forEach(k => st.delete(k)); });
@@ -672,13 +679,28 @@ function syncPhone() {
       const live = new Set((SY.reads || []).map(x => x.rel));
       for (const k in SY.rasked) if (!live.has(k)) delete SY.rasked[k];
       saveRdocs(r.rdocs || {}, Object.keys(RDOCS).filter(k => !live.has(k) && !(k in (r.rdocs || {}))));
+      const used = new Set(Object.values(RDOCS).flatMap(d => imgNames(d.html)));             // 남은 본문이 안 쓰는 그림은 지운다
+      saveRimgs({}, Object.keys(RIMGS).filter(k => !used.has(k)));
+      for (const k in SY.iasked) if (!used.has(k)) delete SY.iasked[k];
     }
     if (Array.isArray(r.rwait)) for (const rel in ROUT) if (ROUT[rel].sent && !r.rwait.includes(rel)) delete ROUT[rel];   // 우체통에서 빠졌다 = 맥이 노트에 썼다
     const rw = rWanted();                                             // 아직 없는 본문을 달라고 (위에서부터 24개 + 연 글)
     if (rw.length) {
       const q = await post({ op: 'rwant', rels: rw });
       if (!q.err) { const now = Date.now(); rw.forEach(x => { SY.rasked[x] = now; }); SY.rfast = now + 120000; }
-    } else SY.rfast = 0;
+    }
+    const iw = rImgWanted(), now = Date.now(), ask = iw.filter(n => now - (SY.iasked[n] || 0) > 300000);   // 받아 둔 본문의 그림: 없으면 달라고, 달라고 한 건 캐시에서 가져온다
+    if (ask.length) {
+      const q = await post({ op: 'iwant', names: ask });
+      if (!q.err) { ask.forEach(n => { SY.iasked[n] = now; }); SY.rfast = now + 120000; }
+    }
+    const fetch_ = iw.filter(n => SY.iasked[n] && !ask.includes(n)).slice(0, 12);
+    r.gotImgs = [];
+    if (fetch_.length) {
+      const g = await post({ op: 'img', names: fetch_ });
+      if (g.imgs && Object.keys(g.imgs).length) { saveRimgs(g.imgs); r.gotImgs = Object.keys(g.imgs); }
+    }
+    if (!rw.length && !iw.length) SY.rfast = 0;
     PO = PO.filter(o => !o.sent || (r.pwait || []).includes(o.id));   // 우체통에서 빠졌다 = 맥이 일정 노트에 썼다 (같은 응답의 plans 에 들어 있다)
     for (const d in DOCS) if (DOCS[d].fm && FAV in DOCS[d].fm && !r.wait?.[d] && !OUT[d]) { delete DOCS[d].fm[FAV]; saveDocs({ [d]: DOCS[d] }); }   // 맥이 명언 모음에 썼다
     if (SY.asked && !r.want) Object.assign(SY, { full: true, asked: false });
@@ -697,6 +719,9 @@ async function phoneRefresh(r) {                                      // 받은 
   if (!$('#settings').hidden) drawSync();
   if (!$('#qpanel').hidden) loadQuotes();
   loadPlans();
+  if (SCREEN === 'read') document.querySelectorAll('#reader .rimg[data-wimg]').forEach(sp => {   // 기다리던 그림이 왔으면 그 자리에 (스크롤은 그대로)
+    if (RIMGS[sp.dataset.wimg]) sp.replaceWith(Object.assign(document.createElement('img'), { src: RIMGS[sp.dataset.wimg], alt: '' }));
+  });
   if (SCREEN === 'read') {                                            // 읽을 글: 기다리던 본문이 왔으면 다시 그린다
     for (const rel in r?.rdocs || {}) RD.docs.delete(rel);
     if (RD.open && RDOCS[RD.open] && $('#reader .rwait')) $('#reader').dataset.rel = '';
@@ -1370,9 +1395,12 @@ async function rBody(rel) {
   const p = doc.props, row = (k, v) => v ? `<dt>${k}</dt><dd>${v}</dd>` : '';
   box.insertAdjacentHTML('beforebegin', `<dl class="rprops">${row(p.channel ? 'channel' : '', esc(p.channel || ''))}${row('description', esc(dash(p.description || '')))}${row('created', esc(p.created || ''))}${row('source', p.source && /^https?:\/\//.test(p.source) ? `<a class="external-link" href="${esc(p.source)}">${esc(rUrl(p.source))}</a>` : '')}</dl>`);
   box.innerHTML = doc.html;
-  if (PHONE) box.querySelectorAll('img[src^="/api/img"]').forEach(im => {   // 볼트 그림은 아직 맥에만 (웹 그림은 그대로 보인다)
-    const name = decodeURIComponent(im.src.split('name=')[1] || '');
-    im.replaceWith(Object.assign(document.createElement('span'), { className: 'rimg', textContent: '그림 · ' + name + ' (맥·옵시디언에서 보여요)' }));
+  if (PHONE) box.querySelectorAll('img[src^="/api/img"]').forEach(im => {   // 볼트 그림: 받아 둔 것은 그대로, 없으면 받는 중 안내 (오면 rImgs 가 바꿔 끼운다)
+    const name = decodeURIComponent(im.getAttribute('src').split('name=')[1] || '');
+    if (RIMGS[name]) return void (im.src = RIMGS[name]);
+    const sp = Object.assign(document.createElement('span'), { className: 'rimg', textContent: '그림 받는 중 · ' + name });
+    sp.dataset.wimg = name; im.replaceWith(sp);
+    if (!SY.iasked[name]) { SY.rfast = Date.now() + 120000; nextPull = 0; }
   });
   for (const n of [...box.children]) { const w = document.createElement('div'); w.className = 'el-' + n.tagName.toLowerCase(); n.replaceWith(w); w.append(n); }   // 옵시디언처럼 덩어리마다 .el-* (테마의 제목 간격 규칙이 이걸 본다)
   box.querySelectorAll('.callout').forEach(c => {
@@ -1383,6 +1411,10 @@ async function rBody(rel) {
 }
 function rList() {                                                    // 폰: 맥이 보낸 목록 + 아직 맥이 노트에 안 쓴 읽음·메모
   return (SY.reads || []).map(x => { const m = ROUT[x.rel]; return m ? { ...x, read_on: m.on ? m.day : '', memo: m.on ? m.memo : '' } : x; });
+}
+function rImgWanted() {                                               // 폰: 받아 둔 본문(위 24개 + 연 글)의 볼트 그림 중 아직 없는 것. 연 글 것부터
+  const L = rList(), win = [L.find(x => x.rel === RD.open), ...L.filter(x => !x.read_on).slice(0, 24)].filter(Boolean);
+  return [...new Set(win.flatMap(x => RDOCS[x.rel] ? imgNames(RDOCS[x.rel].html) : []))].filter(n => !RIMGS[n]);
 }
 function rWanted() {                                                  // 폰: 받아 둘 본문 = 안 읽은 글 위에서 24개 + 지금 연 글 (없거나 노트가 바뀐 것, 5분 안에 달라고 한 건 빼고)
   const L = rList(), want = L.filter(x => !x.read_on).slice(0, 24), open = L.find(x => x.rel === RD.open), now = Date.now();

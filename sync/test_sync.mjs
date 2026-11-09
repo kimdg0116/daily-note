@@ -9,7 +9,8 @@ const store = {}, cache = {};
 const blob = b => ({ b: Buffer.from(b), getBytes() { return this.b; }, getDataAsString() { return this.b.toString(); } });
 const g = {
   PropertiesService: { getScriptProperties: () => ({ getProperties: () => ({ ...store }), setProperties: o => Object.assign(store, o), deleteProperty: k => delete store[k] }) },
-  CacheService: { getScriptCache: () => ({ get: k => cache[k] ?? null, put: (k, v) => { cache[k] = v; } }) },
+  CacheService: { getScriptCache: () => ({ get: k => cache[k] ?? null, put: (k, v) => { cache[k] = v; }, putAll: o => Object.assign(cache, o),
+    getAll: ks => Object.fromEntries(ks.filter(k => k in cache).map(k => [k, cache[k]])) }) },
   LockService: { getScriptLock: () => ({ waitLock() {}, releaseLock() {} }) },
   ContentService: { MimeType: { JSON: 'json' }, createTextOutput: s => ({ setMimeType: () => s }) },
   Utilities: { newBlob: s => blob(s), gzip: b => blob(gzipSync(b.b)), ungzip: b => blob(gunzipSync(b.b)), base64Encode: b => Buffer.from(b).toString('base64'), base64Decode: s => Buffer.from(s, 'base64') },
@@ -120,5 +121,15 @@ const keep = Object.keys(store).filter(k => k.startsWith('b:')).length;
 for (let i = 0; i < 4; i++) call({ op: 'mac', rput: { ['big' + i]: { rel: 'r' + i, html: randomBytes(30000).toString('base64') } } });
 assert.ok(Object.keys(store).filter(k => k.startsWith('rb:') && !k.endsWith('#n')).reduce((n, k) => n + store[k].length, 0) <= 90000);
 assert.equal(Object.keys(store).filter(k => k.startsWith('b:')).length, keep);
+// 그림: 폰이 이름으로 달라고 → 맥이 iq 로 받아 캐시에 넣고 iqdone → 폰이 img 로 가져간다 (Script Properties 에는 안 남는다)
+const G = '메르 그림 01.png', BIG = 'data:image/jpeg;base64,' + randomBytes(150000).toString('base64');
+call({ op: 'iwant', names: [G, G, 3, 'x'.repeat(300)] });
+assert.deepEqual(call({ op: 'mac' }).iq, [G]);
+assert.deepEqual(call({ op: 'img', names: [G] }).imgs, {});                                   // 아직 안 넣었다
+const propsBefore = JSON.stringify(Object.keys(store).filter(k => !k.startsWith('iq')).sort());
+assert.deepEqual(call({ op: 'mac', iput: { [G]: BIG }, iqdone: [G] }).iq, []);
+assert.equal(call({ op: 'img', names: [G, '없는 그림'] }).imgs[G], BIG);                       // 여러 조각을 이어 붙인다
+assert.ok(!Object.keys(store).some(k => k.startsWith('i:')));
+assert.equal(JSON.stringify(Object.keys(store).filter(k => !k.startsWith('iq')).sort()), propsBefore);
 console.log('ok');
 }

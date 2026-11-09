@@ -18,15 +18,19 @@
  * 폰 → {code, op:'plan', ops}             → {ok}       일정 바꾸기 [{id, act:'add'|'toggle', d, n, on?}] (맥이 일정 노트에 쓴다)
  * 폰 → {code, op:'rwant', rels}            → {ok}       읽을 글 본문을 달라고 (맥이 다음에 들를 때 rb 상자에 넣는다)
  * 폰 → {code, op:'rmark', marks}           → {ok}       읽음·메모·되돌리기 [{rel, on, memo, day, t}] (같은 글은 나중 것만, 맥이 노트에 쓴다)
- * 맥 → {code, op:'mac', put, keep?, done, pdone?, resync?, dates?, mind?, quotes?, plans?, reads?, theme?, rput?, rqdone?, rdone?} → {ob, want, po, rq, rob}
+ * 폰 → {code, op:'iwant', names}           → {ok}       본문 속 볼트 그림을 달라고 (맥이 줄여서 캐시에 넣는다)
+ * 폰 → {code, op:'img', names}             → {imgs:{이름: data URL}}   캐시에 들어온 그림만 (없으면 빠진다 → 폰이 다시 달라고 한다)
+ * 맥 → {code, op:'mac', put, keep?, done, pdone?, resync?, dates?, mind?, quotes?, plans?, reads?, theme?, rput?, rqdone?, rdone?, iput?, iqdone?} → {ob, want, po, rq, rob, iq}
  *        quotes = 명언 모음 {list, favs}, plans = 일정 [{d, n, x}], po = 아직 맥이 안 쓴 일정 바꾸기, pdone = 맥이 쓴 것의 id
  *        resync = {to: 이번 묶음 마지막 날짜, done: 끝인지}, done = [[날짜, 'fm'|'sec', 키, t]]
  *        reads = 읽을 글 목록, theme = 옵시디언 테마 CSS, rput = {id: 본문}, rqdone = 넣은(또는 없는) 글, rdone = [[rel, t]] 맥이 노트에 쓴 읽음
  * 읽을 글 본문은 노트 상자와 따로 rb 상자(RBOX)에 둔다. 넘치면 오래된 것부터 버리고, 못 받은 폰은 다시 달라고 한다
+ * 그림(iput)은 Script Properties(500KB)에 안 넣고 Script Cache 에 6시간만 둔다 (값 하나 100KB 까지라 90000자씩 나눈다). 권한이 더 필요 없다
  *
  * 반영: cd sync && ~/Code/apps/dosimetrist-calendar-server/tools/node_modules/.bin/clasp push -f
  *       && …/clasp redeploy <배포 ID>   (배포 ID 는 server.py·index.html 의 SYNC_URL, URL 유지)
  */
+const IMG_TTL = 21600, ICH = 90000;                           // 그림: 캐시에 6시간, 90000자 조각
 const CH = 8000, BOX = 280000, RBOX = 90000;                 // 노트 상자 · 읽을 글 본문 상자 한도 (전체 저장 한도 500KB 안에 목록·테마까지)
 let ALL, W, DEL;                                             // 요청마다: 다 읽어 두고, 쓸 것·지울 것을 모아 한 번에
 
@@ -117,6 +121,26 @@ const OPS = {
     return { ok: true };
   },
 
+  iwant(q) {                                                 // 폰이 달라는 볼트 그림 이름 (맥이 넣으면 iqdone 으로 지운다)
+    const iq = getJ_('iq') || [];
+    for (const n of q.names || []) if (typeof n === 'string' && n && n.length < 200 && !iq.includes(n)) iq.push(n);
+    setJ_('iq', iq.slice(-200));
+    return { ok: true };
+  },
+
+  img(q) {                                                   // 캐시에 있는 그림 (조각이 하나라도 없으면 빼고)
+    const cache = CacheService.getScriptCache(), out = {};
+    const names = (q.names || []).filter(n => typeof n === 'string').slice(0, 12);
+    const heads = cache.getAll(names.map(n => 'i:' + n + '#n'));
+    for (const n of names) {
+      const k = +heads['i:' + n + '#n'] || 0, keys = [];
+      for (let i = 0; i < k; i++) keys.push('i:' + n + '#' + i);
+      const parts = k ? cache.getAll(keys) : {};
+      if (k && keys.every(x => parts[x] != null)) out[n] = keys.map(x => parts[x]).join('');
+    }
+    return { imgs: out };
+  },
+
   plan(q) {                                                  // 폰에서 바꾼 일정. 같은 id 는 한 번만
     const po = getJ_('po') || [];
     for (const o of q.ops || []) if (o && o.id && !po.some(x => x.id === o.id)) po.push(o);
@@ -128,6 +152,17 @@ const OPS = {
     const ob = getJ_('ob') || {}, bi = getJ_('bi') || {}, meta = getJ_('meta') || {}, put = q.put || {};
     let rev = +ALL.rev || 0, want = getJ_('want'), po = getJ_('po') || [], rq = getJ_('rq') || [], rob = getJ_('rob') || {};
     const rput = q.rput || {};
+    let iq = getJ_('iq') || [];
+    if ((q.iqdone || []).length) { iq = iq.filter(x => !q.iqdone.includes(x)); setJ_('iq', iq.length ? iq : null); }
+    if (q.iput && Object.keys(q.iput).length) {               // 맥이 줄여 보낸 그림 → 캐시에 (폰이 img 로 가져간다)
+      const all = {};
+      for (const n in q.iput) {
+        const s = String(q.iput[n]), k = Math.ceil(s.length / ICH);
+        for (let i = 0; i < k; i++) all['i:' + n + '#' + i] = s.slice(i * ICH, (i + 1) * ICH);
+        all['i:' + n + '#n'] = String(k);
+      }
+      CacheService.getScriptCache().putAll(all, IMG_TTL);
+    }
     if ((q.rqdone || []).length) { rq = rq.filter(x => !q.rqdone.includes(x)); setJ_('rq', rq.length ? rq : null); }
     if ((q.rdone || []).length) {                            // 맥이 노트에 쓴 읽음 (그 사이 폰이 또 눌렀으면 남긴다)
       for (const [rel, t] of q.rdone) if (rob[rel] && rob[rel].t === t) delete rob[rel];
@@ -163,7 +198,7 @@ const OPS = {
     if (Object.keys(put).length) { fit_(bi, meta); setJ_('bi', bi); }
     setJ_('meta', meta);
     W.rev = String(rev);
-    return { ob, want, po, rq, rob };
+    return { ob, want, po, rq, rob, iq };
   },
 };
 

@@ -8,7 +8,7 @@
     python3 server.py          서버만 (127.0.0.1:8749). 폰 연동(sync/Secret.js 가 있으면)도 같이 돈다
     VAULT=<사본 볼트> CLAUDE=<가짜 claude> [SYNC_URL=<가짜 연동 서버>] python3 server.py    시험용 (사본 볼트면 진짜 연동 서버로는 안 보낸다)
 """
-import base64, gzip, hashlib, json, os, re, shutil, subprocess, threading, time, unicodedata, urllib.request
+import base64, gzip, hashlib, json, os, re, shutil, subprocess, tempfile, threading, time, unicodedata, urllib.request
 from datetime import date, timedelta
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs, quote
@@ -555,6 +555,7 @@ SYNC_STATE = os.path.join(VAULT, '.daily-sync.json') if os.environ.get('VAULT') 
 SYNC = {'at': 0, 'err': ''}
 BATCH_N, BATCH_BYTES = 80, 250_000     # 폰이 노트를 처음 받아 갈 때 한 묶음 (우체통 상자 300KB 안에)
 RPUT_BYTES = 45_000                    # 폰이 달라는 읽을 글 본문을 한 번에 이만큼 (우체통 본문 상자 90KB 안에, 압축 크기)
+IPUT_BYTES = 2_000_000                 # 폰이 달라는 그림을 한 번에 이만큼 (우체통 캐시로, data URL 글자 수)
 SYNC_WAKE = threading.Event()
 
 
@@ -643,13 +644,26 @@ def sync_once(code):
         rput[hashlib.sha1(doc['rel'].encode()).hexdigest()[:12]] = doc
         rqdone.append(rel)
         size += n
-    body.update(rput=rput, rqdone=rqdone, rdone=st.get('rdone', []))
+    iput, iqdone, isize = {}, [], 0                                     # 폰이 달라는 그림: 줄여서 캐시로 (없는 그림은 요청에서 뺀다)
+    for name in st.get('iq') or []:
+        try:
+            url = phone_img(name)
+        except (OSError, ValueError, subprocess.SubprocessError):
+            url = None
+        if url and iput and isize + len(url) > IPUT_BYTES:
+            break
+        if url:
+            iput[name] = url
+            isize += len(url)
+        iqdone.append(name)
+    body.update(rput=rput, rqdone=rqdone, rdone=st.get('rdone', []), iput=iput, iqdone=iqdone)
     r = sync_post(body)
     if r.get('err'):
         raise RuntimeError('연결 코드가 맞지 않아요' if r['err'] == 'code' else r['err'])
     up.update({d: mt[d] for d in put})
     st.update(done=[], pdone=[], dh=dh, mh=mh, qh=qh, ph=ph, want=r.get('want'), rh=rh, th=th, rdone=[],
-              rq=[x for x in (r.get('rq') or []) if isinstance(x, str)][:60])
+              rq=[x for x in (r.get('rq') or []) if isinstance(x, str)][:60],
+              iq=[x for x in (r.get('iq') or []) if isinstance(x, str)][:200])
     for rel, m in (r.get('rob') or {}).items():                         # 폰에서 누른 읽음 → 노트에, 다음 번에 받았다고 알린다
         try:
             read_mark(rel, bool(m.get('on')), str(m.get('memo') or ''), m.get('day'))
@@ -677,7 +691,7 @@ def sync_once(code):
         st['done'] += [[d] + a for a in acks]
     save_json(SYNC_STATE, st)
     # 곧바로 한 번 더: 볼트에 쓴 걸 올리고 받았다고 알릴 때, 바뀐 노트가 남았을 때, 폰이 노트를 받아 가는 중일 때
-    return bool(st['done']) or bool(st['pdone']) or len(changed) == 40 or bool(st['want']) or bool(st['rq']) or bool(st['rdone'])
+    return bool(st['done']) or bool(st['pdone']) or len(changed) == 40 or bool(st['want']) or bool(st['rq']) or bool(st['rdone']) or bool(st['iq'])
 
 
 def save_json(p, data):
@@ -941,6 +955,38 @@ def read_doc(rel):
             'props': {k: str(f[k])[:10] if k == 'created' else str(f[k]) for k in ('channel', 'description', 'created', 'source') if f.get(k)}}
 
 
+def attach_path(name):
+    """첨부파일 폴더(하위 폴더까지)에서 그림을 이름으로 (옵시디언 ![[이름]] 처럼)"""
+    want = nfc(name)
+    if '/' in name or not want.lower().endswith(IMG_EXT):
+        return None
+    return next((os.path.join(r, x) for r, _, fs in os.walk(ATTACH) for x in fs if nfc(x) == want), None)
+
+
+IMG_W = 1100                                    # 폰에 보내는 그림 폭 (넘으면 줄인다)
+IMG_DIR = os.path.join(tempfile.gettempdir(), 'daily-note-img')
+
+
+def phone_img(name):
+    """폰에 보낼 그림 data URL. 맥 sips 로 폭 1100 까지 줄인 JPEG (투명한 PNG 는 PNG 그대로 줄이고, SVG 는 그대로). 줄인 파일은 임시 폴더에 둔다"""
+    p = attach_path(name)
+    if not p:
+        return None
+    if p.lower().endswith('.svg'):
+        return 'data:image/svg+xml;base64,' + base64.b64encode(open(p, 'rb').read()).decode()
+    info = subprocess.run(['sips', '-g', 'pixelWidth', '-g', 'hasAlpha', p], capture_output=True, text=True, timeout=30).stdout
+    w = int((re.search(r'pixelWidth: (\d+)', info) or [0, 0])[1])
+    fmt = 'png' if re.search(r'hasAlpha: yes', info) else 'jpeg'
+    os.makedirs(IMG_DIR, exist_ok=True)
+    out = os.path.join(IMG_DIR, hashlib.sha1(f'{p}{os.path.getmtime(p)}'.encode()).hexdigest() + '.' + fmt)
+    if not os.path.exists(out):
+        subprocess.run(['sips', '-s', 'format', fmt] + (['-s', 'formatOptions', '72'] if fmt == 'jpeg' else [])
+                       + (['--resampleWidth', str(IMG_W)] if w > IMG_W else []) + [p, '--out', out], capture_output=True, timeout=60)
+    if not os.path.exists(out):
+        return None
+    return f'data:image/{fmt};base64,' + base64.b64encode(open(out, 'rb').read()).decode()
+
+
 def theme_css():
     """볼트의 옵시디언 테마를 .ink 안에만 걸리게 (body·:root·.theme-* → .ink, 나머지는 .ink 아래로)"""
     try:
@@ -1024,10 +1070,7 @@ class H(BaseHTTPRequestHandler):
                 j['elapsed'] = int((j.get('ended') or time.time()) - j['started'])
             return self.send(200, j)
         if u.path == '/api/img':             # 첨부파일 폴더(하위 폴더까지)의 그림을 이름으로 (옵시디언 ![[이름]] 처럼)
-            name = q.get('name', '')
-            want = nfc(name)
-            f = next((os.path.join(r, x) for r, _, fs in (os.walk(ATTACH) if '/' not in name and want.lower().endswith(IMG_EXT) else [])
-                      for x in fs if nfc(x) == want), None)
+            f = attach_path(q.get('name', ''))
             if not f:
                 return self.send(404, {'error': 'not found'})
             ext = f.rsplit('.', 1)[-1].lower()
