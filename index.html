@@ -207,6 +207,7 @@ body.reading { --gut:max(16px, calc((100vw - 1080px) / 2)); }
 .rback svg { width:20px; height:20px; pointer-events:none; }
 .rpos { margin-right:auto; padding-left:6px; font-size:13px; font-weight:600; color:var(--text-faint, var(--mute)); font-variant-numeric:tabular-nums; }
 .rhead .icon-btn { border-color:var(--background-modifier-border, var(--line)); background:var(--background-primary, var(--card)); color:var(--link-color, var(--acc)); }
+.rhead .icon-btn:disabled { opacity:.35; }
 .rscroll { flex:1; min-height:0; overflow-y:auto; overscroll-behavior:contain; }
 .rfoot { flex:none; display:flex; gap:8px; padding:10px 12px; border-top:1px solid var(--background-modifier-border, var(--line)); background:var(--background-primary, var(--card)); }
 .rfoot input { flex:1; min-width:0; height:44px; padding:0 14px; font:inherit; font-size:16px; border:1px solid var(--background-modifier-border, var(--line)); border-radius:12px; background:var(--background-secondary, var(--bg)); color:var(--text-normal, var(--fg)); outline:none; -webkit-user-select:text; user-select:text; }
@@ -571,7 +572,7 @@ function api(u, body) {
 /* ── 폰: 맥 서버 대신 동기화 서버(Apps Script, sync/Code.js)를 우체통으로 쓴다.
    우체통은 오가는 것만 잠깐 들고, 노트 사본은 폰 안(IndexedDB)에 전부 둔다. 처음 연결하면 맥이 모든 노트를 나눠 보내고,
    그 뒤로는 바뀐 노트만 온다. 고친 칸은 보내 두면 맥이 볼트에 쓴다 ── */
-const APP_VERSION = '26.11.10-2';                                     // 올릴 때마다 version.json · sw.js 와 같이 올린다
+const APP_VERSION = '26.11.10-3';                                     // 올릴 때마다 version.json · sw.js 와 같이 올린다
 const LOCAL = /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
 const PHONE = location.protocol === 'https:' || (LOCAL && location.search.includes('phone'));   // ?phone = 맥에서 폰 화면 시험
 // 맥에서 폰 화면을 시험할 때는 늘 가짜 연동 서버(node sync/test_sync.mjs --serve)로만 — 진짜 노트에 시험 글이 섞이지 않게
@@ -1125,6 +1126,7 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Escape' && SCREEN === 'read' && RD.open && !rWide()) return rOpen(null);
   if (el.id === 'planN' && e.key === 'Enter' && !e.isComposing && e.keyCode !== 229) { e.preventDefault(); return planPut(); }
   if (el.closest?.('.plan-add') && e.key === 'Escape') { planAdd = false; planEdit = -1; return draw('c-plans'); }
+  if (e.metaKey && SCREEN === 'read' && (e.key === '[' || e.key === ']')) { e.preventDefault(); return rStep(e.key === '[' ? -1 : 1); }   // 사파리처럼 Cmd+[ ]
   if (!e.metaKey || !D || SCREEN !== 'daily') return;
   if (e.key === '[') { e.preventDefault(); load(shift(D.date, -1)); }
   else if (e.key === ']') { e.preventDefault(); load(shift(D.date, 1)); }
@@ -1379,6 +1381,8 @@ function rReader() {
     r.dataset.rel = x.rel;
     r.innerHTML = `<div class="markdown-preview-view markdown-rendered rpane">
       <div class="rhead"><button type="button" class="rback" data-r="back">${svg('<path d="m15 6-6 6 6 6"/>')}목록</button><span class="rpos"></span>
+        <button type="button" class="icon-btn" data-r="prev" aria-label="앞서 본 글" title="앞서 본 글">${svg('<path d="M19 12H5M12 19l-7-7 7-7"/>')}</button>
+        <button type="button" class="icon-btn" data-r="next" aria-label="다음에 본 글" title="다음에 본 글">${svg('<path d="M5 12h14M12 5l7 7-7 7"/>')}</button>
         <button type="button" class="icon-btn" data-r="obs" aria-label="옵시디언에서 열기" title="옵시디언에서 열기">${svg('<path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/>')}</button></div>
       <div class="rscroll"><div class="rdoc"><div class="rcrumb">${esc(x.folder)} · 읽는 데 ${x.min}분</div><div class="inline-title">${esc(x.title)}</div>
         <div class="rbody"><p class="rwait">불러오는 중</p></div></div></div>
@@ -1388,6 +1392,8 @@ function rReader() {
   const ul = rUnread(), i = ul.indexOf(x), b = r.querySelector('[data-r=done]'), m = $('#rmemo');
   const pos = x.read_on ? '오늘 읽음' : i >= 0 ? `${i + 1} / ${ul.length}` : '', label = x.read_on ? '읽음 취소' : '읽음', ps = r.querySelector('.rpos');
   if (ps.textContent !== pos) ps.textContent = pos;
+  r.querySelector('[data-r=prev]').disabled = rTo(-1) < 0;
+  r.querySelector('[data-r=next]').disabled = rTo(1) < 0;
   if (b.textContent !== label) b.textContent = label;
   b.classList.toggle('undo', !!x.read_on);
   if (document.activeElement !== m) m.value = x.read_on ? x.memo : RD.drafts[x.rel] || '';
@@ -1418,6 +1424,7 @@ async function rBody(rel) {
     if (ic) ic.innerHTML = svg(CALLOUT_ICON[CALLOUT_ALIAS[t] || t] || CALLOUT_ICON.note);
     if (fold) fold.innerHTML = svg('<path d="m6 9 6 6 6-6"/>');
   });
+  if (RH.to?.rel === rel) { r.querySelector('.rscroll').scrollTop = RH.to.y; RH.to = null; }   // 뒤로·앞으로: 떠날 때 보던 자리로
 }
 function rList() {                                                    // 폰: 맥이 보낸 목록 + 아직 맥이 노트에 안 쓴 읽음·메모
   return (SY.reads || []).map(x => { const m = ROUT[x.rel]; return m ? { ...x, read_on: m.on ? m.day : '', memo: m.on ? m.memo : '' } : x; });
@@ -1432,11 +1439,24 @@ function rWanted() {                                                  // 폰: �
   return want.filter(x => (!RDOCS[x.rel] || RDOCS[x.rel].v !== x.v) && now - (SY.rasked[x.rel] || 0) > 300000).map(x => x.rel);
 }
 const rUrl = u => { try { return decodeURI(u); } catch (e) { return u; } };   // 주소의 %EC.. 를 한글로 보이게
-function rOpen(rel) {
+/* 본문 칸에서 거쳐 간 글 기록 (브라우저 뒤로·앞으로처럼). a = 글, y = 떠날 때 스크롤, i = 지금 자리.
+   읽음으로 넘어온 글처럼 기록 밖의 글은 다른 데로 갈 때 기록 끝에 붙인다 */
+const RH = { a: [], y: [], i: -1, to: null };
+function rPush(rel) { if (RH.a[RH.i] !== rel) { RH.a.splice(++RH.i); RH.y.splice(RH.i); RH.a[RH.i] = rel; } }
+function rTo(d) {                                                     // 뒤로(-1)·앞으로(1) 갈 기록 자리, 없으면 -1. 목록에서 빠진 글은 건너뛴다
+  let j = RH.a[RH.i] === RD.open ? RH.i + d : d < 0 ? RH.i : -1;
+  while (RH.a[j] && !rItem(RH.a[j])) j += d;
+  return RH.a[j] ? j : -1;
+}
+function rOpen(rel, j) {                                              // j: 뒤로·앞으로로 갈 기록 자리
+  if (RD.open) { rPush(RD.open); RH.y[RH.i] = $('#reader .rscroll')?.scrollTop || 0; }
+  if (j >= 0) { RH.i = j; RH.to = { rel, y: RH.y[j] || 0 }; }
+  else if (rel) { rPush(rel); RH.y[RH.i] = 0; }
   RD.open = rel;
   rDraw();
-  if (rel) $('#reader .rscroll')?.scrollTo(0, 0);
+  if (rel && !(j >= 0)) $('#reader .rscroll')?.scrollTo(0, 0);
 }
+const rStep = d => { const j = rTo(d); if (j >= 0) rOpen(RH.a[j], j); };
 async function rMark(x, on, memo) {
   const before = { read_on: x.read_on, memo: x.memo };
   x.read_on = on ? RD.today : ''; x.memo = on ? memo : '';
@@ -1484,6 +1504,7 @@ $('#reads').addEventListener('click', e => {
   if (d.rck && x) return x.read_on ? rUndo(x) : rRead(x, false);
   if (d.rd) return rOpen(d.rd);
   if (d.r === 'back') return rOpen(null);
+  if (d.r === 'prev' || d.r === 'next') return rStep(d.r === 'prev' ? -1 : 1);
   if (d.r === 'obs' && x) return api('/api/open', { rel: x.rel }).catch(err => toast(err.message));
   if (d.r === 'done' && x) return x.read_on ? rUndo(x) : rRead(x, true);
 });
