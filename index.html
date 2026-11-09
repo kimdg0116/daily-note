@@ -149,21 +149,21 @@ html { scroll-padding-top:calc(70px + env(safe-area-inset-top, 0px)); }
 #screens button.on .tick { visibility:visible; }
 #screens b, #screens small, #screens .tick { pointer-events:none; }
 #screens .tick svg { display:block; width:100%; height:100%; }
-/* 날짜 이동: DAILY 화면에서만, 제목 아래 한 줄 (전날 · 날짜 · 다음 날을 한 덩어리로, 오른쪽에 오늘) */
-.daterow { display:flex; align-items:center; gap:8px; margin:0 0 12px; }
-.dgroup { flex:1; min-width:0; display:flex; align-items:stretch; height:38px; overflow:hidden; border:1px solid var(--line); border-radius:12px; background:var(--card); }
-.dgroup .dside { flex:none; display:grid; place-items:center; width:46px; padding:0; border:0; background:none; color:var(--acc); }
+/* 날짜 이동: DAILY 화면에서만, 위 막대 안 (전날 · 날짜 · 다음 날을 한 덩어리로, 막대 단추 높이 32).
+   폰(폭 600 미만)은 제목과 도구 단추 사이 가운데에 짧은 날짜(11.10 화)만. 오늘은 달력 아래 '오늘로 가기'.
+   넓은 화면(맥 창·아이패드)은 막대 한가운데에 긴 날짜와 오른쪽에 오늘 */
+.daterow { display:flex; align-items:center; gap:6px; margin:0 auto; }
+.dgroup { display:flex; align-items:stretch; height:32px; overflow:hidden; border:1px solid var(--line); border-radius:10px; background:var(--card); }
+.dgroup .dside { flex:none; display:grid; place-items:center; width:30px; padding:0; border:0; background:none; color:var(--acc); }
 .dgroup .dside svg { width:18px; height:18px; }
-.dgroup .datebtn { flex:1; min-width:0; justify-content:center; height:auto; padding:0 8px; border-width:0 1px; border-radius:0; white-space:nowrap; }
-.daterow .pill { height:38px; padding:0 16px; border-radius:12px; font-size:14px; }
-/* 넓은 화면(맥 창·아이패드, 폭 600 이상)은 위 막대에 자리가 남아서 날짜 줄을 막대 가운데에 올린다.
-   마크업은 그대로 두고 고정 위치만 바꾼다 (막대 단추 높이 32 에 맞춤). 폰은 제목 아래 한 줄 그대로 */
+.dgroup .datebtn { height:auto; padding:0 10px; border-width:0 1px; border-radius:0; white-space:nowrap; }
+.daterow .pill { height:32px; padding:0 16px; border-radius:10px; font-size:14px; }
+@media (max-width:599px) { .dgroup .datebtn svg, #dateText, #today { display:none; } }
 @media (min-width:600px) {
-  .daterow { position:fixed; top:calc(12px + env(safe-area-inset-top, 0px)); left:50%; z-index:21; margin:0; transform:translateX(-50%); }
-  .dgroup { flex:none; height:32px; border-radius:10px; }
+  .daterow { position:absolute; top:calc(12px + env(safe-area-inset-top, 0px)); left:50%; margin:0; transform:translateX(-50%); }
   .dgroup .dside { width:36px; }
   .dgroup .datebtn { padding:0 12px; }
-  .daterow .pill { height:32px; border-radius:10px; }
+  #dateShort { display:none; }
 }
 
 /* ── READING: 읽을 글 목록 + 노트 본문. 넓으면(900 이상) 왼쪽 목록 · 오른쪽 본문, 좁으면 본문이 목록 위로 밀려 들어온다 ── */
@@ -500,19 +500,19 @@ footer { margin-top:24px; }
     <button type="button" role="menuitemradio" data-screen="daily" class="on" aria-checked="true"><b>DAILY</b><small>데일리 노트 · 할 일 · 기록</small><span class="tick"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg></span></button>
     <button type="button" role="menuitemradio" data-screen="read" aria-checked="false"><b>READING</b><small id="readSub">읽어야 할 노트</small><span class="tick"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg></span></button>
   </div>
+  <div class="daterow" id="daterow">
+    <div class="dgroup">
+      <button type="button" class="dside" id="prev" aria-label="전날"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 6-6 6 6 6"/></svg></button>
+      <button type="button" class="datebtn" id="cal" aria-label="달력 열기"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg><span id="dateText"></span><span id="dateShort"></span></button>
+      <button type="button" class="dside" id="next" aria-label="다음 날"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button>
+    </div>
+    <button type="button" class="pill" id="today">오늘</button>
+  </div>
   <div class="tb-icons">
     <button type="button" class="icon-btn" id="quotes" aria-label="명언 모음" title="명언 모음"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 11H6a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v6c0 2.7-1.3 4.3-4 5M19 11h-4a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v6c0 2.7-1.3 4.3-4 5"/></svg></button>
     <button type="button" class="icon-btn" id="obs" aria-label="옵시디언에서 열기" title="옵시디언에서 열기"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg></button>
     <button type="button" class="icon-btn" id="gear" aria-label="설정 열기"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg></button>
   </div>
-</div>
-<div class="daterow" id="daterow">
-  <div class="dgroup">
-    <button type="button" class="dside" id="prev" aria-label="전날"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 6-6 6 6 6"/></svg></button>
-    <button type="button" class="datebtn" id="cal" aria-label="달력 열기"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg><span id="dateText"></span></button>
-    <button type="button" class="dside" id="next" aria-label="다음 날"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button>
-  </div>
-  <button type="button" class="pill" id="today">오늘</button>
 </div>
 <main id="view"></main>
 <section id="reads" aria-label="읽을 글" hidden><div id="rlist"></div><article class="reader ink theme-light" id="reader" aria-label="노트 본문"></article></section>
@@ -571,7 +571,7 @@ function api(u, body) {
 /* ── 폰: 맥 서버 대신 동기화 서버(Apps Script, sync/Code.js)를 우체통으로 쓴다.
    우체통은 오가는 것만 잠깐 들고, 노트 사본은 폰 안(IndexedDB)에 전부 둔다. 처음 연결하면 맥이 모든 노트를 나눠 보내고,
    그 뒤로는 바뀐 노트만 온다. 고친 칸은 보내 두면 맥이 볼트에 쓴다 ── */
-const APP_VERSION = '26.11.10-1';                                     // 올릴 때마다 version.json · sw.js 와 같이 올린다
+const APP_VERSION = '26.11.10-2';                                     // 올릴 때마다 version.json · sw.js 와 같이 올린다
 const LOCAL = /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
 const PHONE = location.protocol === 'https:' || (LOCAL && location.search.includes('phone'));   // ?phone = 맥에서 폰 화면 시험
 // 맥에서 폰 화면을 시험할 때는 늘 가짜 연동 서버(node sync/test_sync.mjs --serve)로만 — 진짜 노트에 시험 글이 섞이지 않게
@@ -792,6 +792,7 @@ async function load(d) {
   want = d;
   const t = new Date(d + 'T12:00');
   $('#dateText').textContent = `${t.getFullYear()}. ${t.getMonth() + 1}. ${t.getDate()}. (${WD[t.getDay()]})`;
+  $('#dateShort').textContent = `${t.getMonth() + 1}.${String(t.getDate()).padStart(2, '0')} ${WD[t.getDay()]}`;   // 폰 막대용
   let n;
   try { n = await api('/api/day?date=' + d); }
   catch (e) { $('#view').innerHTML = `<div class="card"><p class="muted">노트를 열지 못했어요 · ${esc(e.message)}</p></div>`; return; }
@@ -1210,7 +1211,7 @@ function drawCal() {
     <button type="button" class="icon-btn" data-calm="-1" aria-label="전달"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 6-6 6 6 6"/></svg></button>
     <button type="button" class="pill" data-calm="0">이번 달</button>
     <button type="button" class="icon-btn" data-calm="1" aria-label="다음 달"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button></div>
-    <div class="cal-grid">${cells}</div>${picking ? `<div class="cal-foot"><button type="button" class="pill${calPick ? '' : ' on'}" data-nodate="1">기한 없음 · 가능한 빨리</button></div>` : ''}`;
+    <div class="cal-grid">${cells}</div>${picking ? `<div class="cal-foot"><button type="button" class="pill${calPick ? '' : ' on'}" data-nodate="1">기한 없음 · 가능한 빨리</button></div>` : `<div class="cal-foot"><button type="button" class="pill" data-day="${today()}">오늘로 가기</button></div>`}`;
 }
 $('#calendar').addEventListener('click', e => {
   if (e.target.id === 'calendar') return openCal(false);
