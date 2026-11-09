@@ -175,4 +175,22 @@ S.plan_apply([{'act': 'edit', 'd': '2026-11-20', 'n': '건강검진', 'nd': '202
 assert open(S.PLANS).read() == '- [x] 2026-12-05 토플 시험\n메모 줄\n- [ ] \n- [ ] 2026-11-27 건강검진 (공복)\n- [x] 은행 서류 ➕ 2026-11-03 ✅ 2026-11-02\n'
 S.plan_apply([{'act': 'edit', 'd': '', 'n': '은행 서류', 'nd': '2026-11-30', 'nn': '은행 서류'}])
 assert S.plan_list()[-1] == {'d': '2026-11-30', 'n': '은행 서류', 'x': True, 'a': '2026-11-03'}
+
+# 읽을 글: 데일리 노트 「오늘 읽은 글」 줄 넣기·고치기·빼기. 다 빼면 원래 노트와 똑같다
+day_lines = ["### Today's Tasks", '', '> [!abstract]- 오늘 작성·수정한 노트', '> LIST', '', '> [!tip]+ 하루 마무리', '> 몸']
+a = S.read_lines_set(S.read_lines_set(day_lines, '가', '메모'), '나', '')
+assert a[3:7] == ['> LIST', '', S.READ_HEAD, '> - [[가]] - 메모'] and a[7] == '> - [[나]]' and a[8] == '', a
+a = S.read_lines_set(a, '가', '고친 메모')
+assert '> - [[가]] - 고친 메모' in a and a.count('> - [[가]] - 메모') == 0
+assert S.read_lines_set(S.read_lines_set(a, '가', None), '나', None) == day_lines
+for base in (['> [!tip]+ 하루 마무리', '> 몸'], ['끝']):         # 작성·수정 칸이 없는 옛 노트
+    assert S.read_lines_set(S.read_lines_set(base, '가', 'm'), '가', None) == base
+# 읽음 되돌리기: read_on 은 빈 값(Home 체크를 풀 때와 같다), memo 줄은 지운다
+fm = 'title: x\ntype: note\nread_on:\nmemo: |-\n  두 줄\n  메모\ntags:\n  - a'
+assert S.fm_del(S.fm_set(S.fm_set(fm, 'read_on', date(2026, 11, 9)), 'read_on', None), 'memo') == 'title: x\ntype: note\nread_on:\ntags:\n  - a'
+assert 'read_on: 2026-11-09' in S.fm_set(fm, 'read_on', date(2026, 11, 9))           # 옵시디언처럼 따옴표 없이
+# 본문 HTML: 옵시디언 문법, 노트 속 HTML 은 글자로
+h = S.md_blocks('[[노트|별명]] ==형광== ![[그림 1.png]]\n> [!tip]- 팁\n> 안\n- [x] 끝\n```dataview\nLIST\n```\n<script>x</script>'.split('\n'))
+assert '<a class="internal-link" data-href="노트">별명</a>' in h and '<mark>형광</mark>' in h and 'src="/api/img?name=%EA%B7%B8%EB%A6%BC%201.png"' in h, h
+assert '<details class="callout" data-callout="tip">' in h and 'checked>' in h and 'dv-skip' in h and '<script>' not in h, h
 print('ok')

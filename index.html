@@ -32,7 +32,7 @@ try {                                                                  // 테마
   --font-body:"SUIT Variable", "Apple SD Gothic Neo", sans-serif;
   --bg:#eef5ff; --bg-top:#e3eeff; --card:#ffffff; --fg:#191919; --mute:#666666; --line:#dbe8ff;
   --acc:#2e70ff; --deep:#1428a0; --soft:#e8f1ff; --blue:#2e70ff; --sky:#00b4ff;
-  --red:#fa4b50; --warn:#fa4b50; --orange:#ff871e; --clash:#ffe7d2; --toast:#1428a0; --orange-ink:#b04f00;
+  --red:#fa4b50; --warn:#fa4b50; --orange:#ff871e; --grn:#13804b; --clash:#ffe7d2; --toast:#1428a0; --orange-ink:#b04f00;
   --bar:rgba(227,238,255,.88); --bar-fg:#1428a0; --shadow:0 6px 22px color-mix(in srgb, var(--acc) 10%, transparent); --card-border:transparent;
   color-scheme:light;
 }
@@ -40,7 +40,7 @@ try {                                                                  // 테마
   :root:not([data-theme="light"]) {
     --bg:#0f1420; --bg-top:#142039; --card:#1a2233; --fg:#e9eef8; --mute:#9ba8bf; --line:#2b3750;
     --acc:#508eff; --deep:#8cbaff; --soft:#1d2c4d; --blue:#8cbaff; --sky:#33c3ff;
-    --red:#fb6f73; --warn:#fb6f73; --orange:#ff9f4b; --clash:#33261a; --toast:#0a4bff; --orange-ink:#ffb46e;
+    --red:#fb6f73; --warn:#fb6f73; --orange:#ff9f4b; --grn:#4cc38a; --clash:#33261a; --toast:#0a4bff; --orange-ink:#ffb46e;
     --bar:rgba(20,32,57,.88); --bar-fg:#e9eef8; --shadow:0 6px 22px rgba(0,0,0,.35); --card-border:#232e45;
     color-scheme:dark;
   }
@@ -48,7 +48,7 @@ try {                                                                  // 테마
 :root[data-theme="dark"] {
   --bg:#0f1420; --bg-top:#142039; --card:#1a2233; --fg:#e9eef8; --mute:#9ba8bf; --line:#2b3750;
   --acc:#508eff; --deep:#8cbaff; --soft:#1d2c4d; --blue:#8cbaff; --sky:#33c3ff;
-  --red:#fb6f73; --warn:#fb6f73; --orange:#ff9f4b; --clash:#33261a; --toast:#0a4bff; --orange-ink:#ffb46e;
+  --red:#fb6f73; --warn:#fb6f73; --orange:#ff9f4b; --grn:#4cc38a; --clash:#33261a; --toast:#0a4bff; --orange-ink:#ffb46e;
   --bar:rgba(20,32,57,.88); --bar-fg:#e9eef8; --shadow:0 6px 22px rgba(0,0,0,.35); --card-border:#232e45;
   color-scheme:dark;
 }
@@ -134,7 +134,139 @@ html { scroll-padding-top:calc(70px + env(safe-area-inset-top, 0px)); }
 .brand { flex:none; margin-right:auto; }
 .datebtn { display:flex; align-items:center; gap:7px; height:32px; padding:0 12px; font-family:var(--num); font-size:15px; font-weight:600; border:1px solid var(--line); border-radius:999px; background:var(--card); color:var(--fg); }
 .datebtn svg { width:16px; height:16px; color:var(--acc); }
-@media (max-width:520px) { .brand { display:none; } .top { justify-content:flex-end; gap:4px; } .datebtn { margin-right:auto; padding:0 10px; white-space:nowrap; } .top .icon-btn { width:33px; } .top .pill { padding:0 11px; } }
+/* 제목 = 화면 고르기 (도시메트리 캘린더의 제목 메뉴와 같은 규칙): DAILY 를 누르면 바로 아래에 READING 이 붙어 나온다.
+   메뉴 단추는 처음부터 있고 hidden·class 만 바꾼다 (아이폰은 누르는 중에 단추를 새로 만들면 탭이 끊긴다) */
+.top .brand { display:inline-flex; align-items:center; cursor:pointer; }
+.brand svg { width:.75em; height:.75em; margin-left:6px; opacity:.6; transition:transform .2s; pointer-events:none; }
+.brand[aria-expanded="true"] svg { transform:rotate(180deg); }
+.tb-icons { display:flex; gap:6px; margin-left:auto; }
+#screens { position:absolute; top:calc(100% - 4px); left:calc(var(--gut) - 4px); z-index:25; width:min(290px, calc(100vw - 24px)); padding:6px; border:1px solid var(--line); border-radius:14px; background:var(--card); box-shadow:0 10px 30px color-mix(in srgb, var(--acc) 18%, transparent); }
+#screens button { position:relative; display:block; width:100%; padding:10px 40px 10px 12px; border:0; border-radius:10px; background:none; color:var(--fg); text-align:left; }
+#screens button b { display:block; font-family:Oswald, sans-serif; font-size:17px; font-weight:700; letter-spacing:.06em; color:var(--deep); }
+#screens button small { display:block; margin-top:1px; font-size:13px; font-weight:600; color:var(--mute); }
+#screens button.on { background:var(--soft); }
+#screens .tick { position:absolute; top:50%; right:12px; width:18px; height:18px; margin-top:-9px; color:var(--acc); visibility:hidden; }
+#screens button.on .tick { visibility:visible; }
+#screens b, #screens small, #screens .tick { pointer-events:none; }
+#screens .tick svg { display:block; width:100%; height:100%; }
+/* 날짜 이동: DAILY 화면에서만, 제목 아래 한 줄 (전날 · 날짜 · 다음 날을 한 덩어리로, 오른쪽에 오늘) */
+.daterow { display:flex; align-items:center; gap:8px; margin:0 0 12px; }
+.dgroup { flex:1; min-width:0; display:flex; align-items:stretch; height:38px; overflow:hidden; border:1px solid var(--line); border-radius:12px; background:var(--card); }
+.dgroup .dside { flex:none; display:grid; place-items:center; width:46px; padding:0; border:0; background:none; color:var(--acc); }
+.dgroup .dside svg { width:18px; height:18px; }
+.dgroup .datebtn { flex:1; min-width:0; justify-content:center; height:auto; padding:0 8px; border-width:0 1px; border-radius:0; white-space:nowrap; }
+.daterow .pill { height:38px; padding:0 16px; border-radius:12px; font-size:14px; }
+
+/* ── READING: 읽을 글 목록 + 노트 본문. 넓으면(900 이상) 왼쪽 목록 · 오른쪽 본문, 좁으면 본문이 목록 위로 밀려 들어온다 ── */
+body.reading { --gut:max(16px, calc((100vw - 1080px) / 2)); }
+#reads { display:grid; gap:16px; align-items:start; }
+#rlist .sum { display:flex; align-items:baseline; gap:8px; margin:2px 2px 12px; }
+#rlist .sum .n { font-family:var(--num); font-size:34px; font-weight:600; line-height:1; color:var(--deep); }
+#rlist .sum .l { font-weight:700; }
+#rlist .sum .r { margin-left:auto; font-size:13px; color:var(--mute); }
+#rlist .fchips { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px; }
+#rlist .fchip { height:30px; padding:0 12px; font-size:13px; font-weight:700; border:1px solid var(--line); border-radius:999px; background:var(--card); color:var(--fg); }
+#rlist .fchip i { margin-left:4px; font-style:normal; font-family:var(--num); font-weight:500; color:var(--mute); pointer-events:none; }
+#rlist .fchip.on { border-color:var(--deep); background:var(--deep); color:var(--card); }
+#rlist .fchip.on i { color:inherit; opacity:.8; }
+#rlist .items { display:grid; gap:8px; margin:0; padding:0; list-style:none; }
+#rlist .item { display:flex; align-items:stretch; overflow:hidden; border:1px solid var(--card-border); border-radius:14px; background:var(--card); box-shadow:var(--shadow); }
+#rlist .ck { flex:none; display:flex; justify-content:center; width:46px; padding:14px 0 0; border:0; background:none; }
+#rlist .ck span { display:grid; place-items:center; width:24px; height:24px; border:2px solid var(--line); border-radius:50%; color:#fff; pointer-events:none; }
+#rlist .ck svg { width:14px; height:14px; opacity:0; }
+#rlist .ck.on span { border-color:var(--acc); background:var(--acc); }
+#rlist .ck.on svg { opacity:1; }
+#rlist .it { flex:1; min-width:0; display:grid; gap:4px; padding:12px 14px 12px 0; border:0; background:none; color:var(--fg); text-align:left; }
+#rlist .it > * { pointer-events:none; }
+#rlist .it .t { font-size:15px; font-weight:700; line-height:1.4; word-break:keep-all; }
+#rlist .meta { display:flex; flex-wrap:wrap; align-items:center; gap:4px 6px; font-size:12px; color:var(--mute); font-variant-numeric:tabular-nums; }
+#rlist .tag { padding:1px 8px; border-radius:999px; background:color-mix(in srgb, var(--gc) 14%, transparent); color:var(--gc); font-size:11.5px; font-weight:700; }
+#rlist .g-work { --gc:var(--acc); } #rlist .g-clip { --gc:var(--orange-ink); } #rlist .g-concept { --gc:var(--grn); }
+#rlist .d { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; font-size:13.5px; color:var(--mute); word-break:keep-all; }
+#rlist .item.done .t { color:var(--mute); text-decoration:line-through; }
+#rlist .item.done .d.memo { color:var(--fg); }
+#rlist .d.memo b { margin-right:6px; color:var(--acc); font-size:12px; }
+#rlist .sec { display:flex; align-items:baseline; margin:24px 2px 8px; font-size:13px; font-weight:700; color:var(--mute); }
+#rlist .sec span { margin-left:auto; font-weight:500; }
+#rlist .hint { margin:10px 2px 0; font-size:12.5px; color:var(--mute); }
+#rlist .empty { padding:22px 16px; border-radius:14px; background:var(--card); text-align:center; color:var(--mute); }
+#rlist .empty b { display:block; color:var(--fg); }
+.reader { background:var(--background-primary, var(--card)); }
+.rpane { display:flex; flex-direction:column; height:100%; background:var(--background-primary, var(--card)); color:var(--text-normal, var(--fg)); }
+.rhead { flex:none; display:flex; align-items:center; gap:8px; min-height:48px; padding:6px 10px; border-bottom:1px solid var(--background-modifier-border, var(--line)); }
+.rback { display:inline-flex; align-items:center; gap:2px; height:34px; padding:0 10px 0 2px; border:0; background:none; color:var(--link-color, var(--acc)); font-size:15px; font-weight:700; }
+.rback svg { width:20px; height:20px; pointer-events:none; }
+.rpos { margin-right:auto; padding-left:6px; font-size:13px; font-weight:600; color:var(--text-faint, var(--mute)); font-variant-numeric:tabular-nums; }
+.rhead .icon-btn { border-color:var(--background-modifier-border, var(--line)); background:var(--background-primary, var(--card)); color:var(--link-color, var(--acc)); }
+.rscroll { flex:1; min-height:0; overflow-y:auto; overscroll-behavior:contain; }
+.rfoot { flex:none; display:flex; gap:8px; padding:10px 12px; border-top:1px solid var(--background-modifier-border, var(--line)); background:var(--background-primary, var(--card)); }
+.rfoot input { flex:1; min-width:0; height:44px; padding:0 14px; font:inherit; font-size:16px; border:1px solid var(--background-modifier-border, var(--line)); border-radius:12px; background:var(--background-secondary, var(--bg)); color:var(--text-normal, var(--fg)); outline:none; -webkit-user-select:text; user-select:text; }
+.rfoot input:focus { border-color:var(--link-color, var(--acc)); }
+.rfoot .main { flex:none; height:44px; padding:0 20px; border-radius:12px; font-size:15px; font-weight:800; }
+.rfoot .main.undo { border:1px solid var(--background-modifier-border, var(--line)); background:var(--background-primary, var(--card)); color:var(--red); }
+.rempty { margin:auto; padding:24px; text-align:center; color:var(--text-faint, var(--mute)); }
+.rempty b { display:block; margin-bottom:4px; font-size:17px; color:var(--text-normal, var(--fg)); }
+@media (min-width:900px) {
+  #reads { grid-template-columns:340px minmax(0, 1fr); }
+  .reader { position:sticky; top:calc(82px + env(safe-area-inset-top, 0px)); height:calc(100dvh - 102px - env(safe-area-inset-top, 0px)); overflow:hidden; border:1px solid var(--card-border); border-radius:16px; box-shadow:var(--shadow); }
+  .rback { display:none !important; }
+  #rlist .item.sel { outline:2px solid var(--acc); outline-offset:-2px; }
+}
+@media (max-width:899px) {
+  .reader { position:fixed; inset:0; z-index:30; transform:translateX(100%); visibility:hidden; transition:transform .24s ease, visibility 0s linear .24s; }
+  .reader.open { transform:none; visibility:visible; transition:transform .24s ease; }
+  .rhead { padding-top:calc(6px + env(safe-area-inset-top, 0px)); }
+  .rfoot { padding-bottom:calc(10px + env(safe-area-inset-bottom, 0px)); }
+}
+@media (prefers-reduced-motion:reduce) { .reader, .reader.open { transition:none; } }
+
+/* 노트 본문: 옵시디언 읽기 모드의 기본 배치만 둔다. 색·글씨 크기·간격은 볼트의 옵시디언 테마(/api/theme.css, .ink 안에만 걸림)가 정한다.
+   그래서 테마를 고치면 앱도 같이 바뀐다. 앱이 라이트면 테마의 라이트, 다크면 다크 (.ink.theme-light / .theme-dark) */
+.ink .rdoc { padding:16px 20px 40px; font-family:var(--font-text, -apple-system, sans-serif); font-size:var(--font-text-size, 16px); line-height:var(--line-height-normal, 1.5); letter-spacing:0; color:var(--text-normal); -webkit-user-select:text; user-select:text; word-break:normal; }
+@media (min-width:900px) { .ink .rdoc { padding:24px 32px 48px; } }
+.ink .rcrumb { font-size:12px; color:var(--text-faint); overflow-wrap:anywhere; }
+.ink .inline-title { margin:.15em 0 .5em; font-size:var(--inline-title-size, var(--h1-size, 2em)); font-weight:var(--inline-title-weight, var(--h1-weight, 700)); line-height:var(--h1-line-height, 1.2); color:var(--inline-title-color, var(--h1-color)); }
+.ink .rprops { display:grid; grid-template-columns:auto minmax(0, 1fr); gap:3px 14px; margin:0 0 1.3em; padding-bottom:.9em; border-bottom:1px solid var(--hr-color, var(--background-modifier-border)); font-size:.875em; }
+.ink .rprops dt { color:var(--text-faint); }
+.ink .rprops dd { margin:0; color:var(--text-muted); overflow-wrap:anywhere; }
+.ink .rwait { color:var(--text-faint); }
+.ink .rdoc :is(h1, h2, h3, h4, h5, h6) { margin:var(--heading-spacing, 1.4em) 0 .5em; }
+.ink .rdoc h1 { font-size:var(--h1-size); font-weight:var(--h1-weight); line-height:var(--h1-line-height); color:var(--h1-color); }
+.ink .rdoc h2 { font-size:var(--h2-size); font-weight:var(--h2-weight); line-height:var(--h2-line-height); color:var(--h2-color); }
+.ink .rdoc h3 { font-size:var(--h3-size); font-weight:var(--h3-weight); line-height:var(--h3-line-height); color:var(--h3-color); }
+.ink .rdoc h4 { font-size:var(--h4-size); font-weight:var(--h4-weight); line-height:var(--h4-line-height); color:var(--h4-color); }
+.ink .rdoc h5 { font-size:var(--h5-size); font-weight:var(--h5-weight); line-height:var(--h5-line-height); color:var(--h5-color); }
+.ink .rdoc h6 { font-size:var(--h6-size); font-weight:var(--h6-weight); line-height:var(--h6-line-height); color:var(--h6-color); }
+.ink .rdoc p { margin:var(--p-spacing, 1rem) 0; }
+.ink .rdoc :is(ul, ol) { margin:var(--p-spacing, 1rem) 0; padding-inline-start:var(--list-indent, 2.25em); }
+.ink .rdoc li { margin:var(--list-spacing, .075em) 0; }
+.ink .rdoc li::marker { color:var(--list-marker-color, var(--text-faint)); }
+.ink .rdoc li.task-list-item { list-style:none; margin-inline-start:-1.5em; }
+.ink .rdoc li.task-list-item input { margin:0 .4em 0 0; vertical-align:-.1em; }
+.ink .rdoc strong { font-weight:var(--bold-weight, 700); color:var(--bold-color); }
+.ink .rdoc em { color:var(--italic-color); }
+.ink .rdoc a { color:var(--link-color); text-decoration:var(--link-decoration, none); cursor:pointer; }
+.ink .rdoc a.external-link { color:var(--link-external-color, var(--link-color)); }
+.ink .rdoc code { padding:.1em .25em; border-radius:4px; background:var(--code-background); color:var(--code-normal); font-family:var(--font-monospace, ui-monospace, monospace); font-size:var(--code-size, .85em); }
+.ink .rdoc pre { overflow-x:auto; padding:12px 15px; border-radius:5px; background:var(--code-background); }
+.ink .rdoc pre code { padding:0; background:none; font-size:inherit; }
+.ink .rdoc blockquote { margin:1em 0; padding:0 0 0 1em; border-left:2px solid var(--blockquote-border-color); color:var(--blockquote-color); }
+.ink .rdoc hr { margin:2em 0; border:0; border-top:1px solid var(--hr-color); }
+.ink .rdoc mark { background:var(--text-highlight-bg); color:var(--text-highlight-fg, inherit); }
+.ink .rdoc table { display:block; max-width:100%; overflow-x:auto; margin:1em 0; border-collapse:collapse; }
+.ink .rdoc th { background:var(--table-header-background); font-weight:var(--table-header-weight, 600); text-align:left; }
+.ink .rdoc :is(th, td) { padding:5px 8px; border:var(--table-border-width, 1px) solid var(--table-border-color, var(--background-modifier-border)); }
+.ink .rdoc img { max-width:100%; height:auto; }
+.ink .rdoc .callout { --callout-color:138, 138, 138; margin:1em 0; overflow:hidden; }
+.ink .rdoc .callout-title { display:flex; align-items:center; gap:6px; color:rgb(var(--callout-color)); list-style:none; }
+.ink .rdoc summary.callout-title { cursor:pointer; }
+.ink .rdoc summary.callout-title::-webkit-details-marker { display:none; }
+.ink .rdoc .callout-icon { display:flex; }
+.ink .rdoc .callout-icon svg, .ink .rdoc .callout-fold svg { width:16px; height:16px; }
+.ink .rdoc .callout-fold { display:flex; margin-left:auto; opacity:.7; transition:transform .15s; }
+.ink .rdoc details.callout:not([open]) .callout-fold { transform:rotate(-90deg); }
+.ink .rdoc .callout-content { margin-top:.4em; }
+.ink .rdoc .dv-skip { padding:8px 12px; border:1px dashed var(--background-modifier-border); border-radius:5px; color:var(--text-faint); font-size:.85em; }
 .phone .mac-only, html:not(.phone) .phone-only { display:none !important; }
 .pill { flex:none; height:32px; padding:0 13px; font-size:13px; font-weight:700; border:1px solid var(--line); border-radius:999px; background:var(--card); color:var(--acc); }
 
@@ -353,16 +485,27 @@ footer { margin-top:24px; }
 </head>
 <body>
 <div class="top">
-  <span class="brand">DAILY</span>
-  <button type="button" class="icon-btn" id="prev" aria-label="전날"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 6-6 6 6 6"/></svg></button>
-  <button type="button" class="datebtn" id="cal" aria-label="달력 열기"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg><span id="dateText"></span></button>
-  <button type="button" class="icon-btn" id="next" aria-label="다음 날"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button>
+  <button type="button" class="brand" id="brand" aria-haspopup="true" aria-expanded="false"><span id="brandText">DAILY</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
+  <div id="screens" role="menu" aria-label="화면" hidden>
+    <button type="button" role="menuitemradio" data-screen="daily" class="on" aria-checked="true"><b>DAILY</b><small>데일리 노트 · 할 일 · 기록</small><span class="tick"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg></span></button>
+    <button type="button" role="menuitemradio" data-screen="read" aria-checked="false"><b>READING</b><small id="readSub">읽어야 할 노트</small><span class="tick"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg></span></button>
+  </div>
+  <div class="tb-icons">
+    <button type="button" class="icon-btn" id="quotes" aria-label="명언 모음" title="명언 모음"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 11H6a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v6c0 2.7-1.3 4.3-4 5M19 11h-4a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v6c0 2.7-1.3 4.3-4 5"/></svg></button>
+    <button type="button" class="icon-btn" id="obs" aria-label="옵시디언에서 열기" title="옵시디언에서 열기"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg></button>
+    <button type="button" class="icon-btn" id="gear" aria-label="설정 열기"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg></button>
+  </div>
+</div>
+<div class="daterow" id="daterow">
+  <div class="dgroup">
+    <button type="button" class="dside" id="prev" aria-label="전날"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 6-6 6 6 6"/></svg></button>
+    <button type="button" class="datebtn" id="cal" aria-label="달력 열기"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg><span id="dateText"></span></button>
+    <button type="button" class="dside" id="next" aria-label="다음 날"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button>
+  </div>
   <button type="button" class="pill" id="today">오늘</button>
-  <button type="button" class="icon-btn" id="quotes" aria-label="명언 모음" title="명언 모음"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 11H6a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v6c0 2.7-1.3 4.3-4 5M19 11h-4a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v6c0 2.7-1.3 4.3-4 5"/></svg></button>
-  <button type="button" class="icon-btn" id="obs" aria-label="옵시디언에서 열기" title="옵시디언에서 열기"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg></button>
-  <button type="button" class="icon-btn" id="gear" aria-label="설정 열기"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg></button>
 </div>
 <main id="view"></main>
+<section id="reads" aria-label="읽을 글" hidden><div id="rlist"></div><article class="reader ink theme-light" id="reader" aria-label="노트 본문"></article></section>
 <footer><p class="ver mac-only">⌘[ ⌘] 날짜 이동 · ⌘T 오늘 · 쓰는 대로 옵시디언 노트에 저장</p><p class="ver phone-only">폰에서 쓴 것은 맥이 켜져 있을 때 옵시디언 노트에 들어가요</p><p class="ver" id="ver"></p><p class="ver">© Dongkyu Kim</p></footer>
 <button type="button" id="upd" class="upd" hidden>새 버전이 있습니다 · 눌러서 새로고침</button>
 
@@ -418,7 +561,7 @@ function api(u, body) {
 /* ── 폰: 맥 서버 대신 동기화 서버(Apps Script, sync/Code.js)를 우체통으로 쓴다.
    우체통은 오가는 것만 잠깐 들고, 노트 사본은 폰 안(IndexedDB)에 전부 둔다. 처음 연결하면 맥이 모든 노트를 나눠 보내고,
    그 뒤로는 바뀐 노트만 온다. 고친 칸은 보내 두면 맥이 볼트에 쓴다 ── */
-const APP_VERSION = '26.11.09-3';                                     // 올릴 때마다 version.json · sw.js 와 같이 올린다
+const APP_VERSION = '26.11.09-4';                                     // 올릴 때마다 version.json · sw.js 와 같이 올린다
 const LOCAL = /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
 const PHONE = location.protocol === 'https:' || (LOCAL && location.search.includes('phone'));   // ?phone = 맥에서 폰 화면 시험
 // 맥에서 폰 화면을 시험할 때는 늘 가짜 연동 서버(node sync/test_sync.mjs --serve)로만 — 진짜 노트에 시험 글이 섞이지 않게
@@ -562,7 +705,7 @@ async function load(d) {
   await flush();
   want = d;
   const t = new Date(d + 'T12:00');
-  $('#dateText').textContent = (innerWidth < 520 ? '' : t.getFullYear() + '. ') + `${t.getMonth() + 1}. ${t.getDate()}. (${WD[t.getDay()]})`;
+  $('#dateText').textContent = `${t.getFullYear()}. ${t.getMonth() + 1}. ${t.getDate()}. (${WD[t.getDay()]})`;
   let n;
   try { n = await api('/api/day?date=' + d); }
   catch (e) { $('#view').innerHTML = `<div class="card"><p class="muted">노트를 열지 못했어요 · ${esc(e.message)}</p></div>`; return; }
@@ -891,9 +1034,11 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Escape' && !$('#calendar').hidden) return openCal(false);
   if (e.key === 'Escape' && !$('#settings').hidden) return openSettings(false);
   if (e.key === 'Escape' && !$('#qpanel').hidden) return openQuotes(false);
+  if (e.key === 'Escape' && !$('#screens').hidden) return showMenu(false);
+  if (e.key === 'Escape' && SCREEN === 'read' && RD.open && !rWide()) return rOpen(null);
   if (el.id === 'planN' && e.key === 'Enter' && !e.isComposing && e.keyCode !== 229) { e.preventDefault(); return planPut(); }
   if (el.closest?.('.plan-add') && e.key === 'Escape') { planAdd = false; planEdit = -1; return draw('c-plans'); }
-  if (!e.metaKey || !D) return;
+  if (!e.metaKey || !D || SCREEN !== 'daily') return;
   if (e.key === '[') { e.preventDefault(); load(shift(D.date, -1)); }
   else if (e.key === ']') { e.preventDefault(); load(shift(D.date, 1)); }
   else if (e.key === 't') { e.preventDefault(); load(today()); }
@@ -902,6 +1047,8 @@ document.addEventListener('keydown', e => {
 document.addEventListener('click', e => {
   const b = e.target.closest('button');
   if (!b) return;
+  if (b.id === 'brand') return showMenu($('#screens').hidden);
+  if (b.dataset.screen) return setScreen(b.dataset.screen);
   if (b.dataset.tog) { setFm(b.dataset.tog, D.fm[b.dataset.tog] !== true); return draw(b.closest('section').id); }
   if (b.dataset.mood) { const [k, s] = b.dataset.mood.split(':'), n = +s; setFm(k, D.fm[k] == n ? null : n); return draw('c-close'); }
   if (b.dataset.wkday) return load(b.dataset.wkday);
@@ -1028,15 +1175,217 @@ $('#qpanel').addEventListener('click', e => {
 });
 $('#vaultName').addEventListener('change', e => { try { localStorage.setItem('dn.vault', e.target.value.trim()); } catch (x) {} toast('볼트 이름을 바꿨어요'); });
 // 옵시디언에서 고치고 돌아오면 새로 읽는다 (쓰는 중이 아닐 때만)
-addEventListener('focus', async () => {
-  loadPlans();
+async function refreshDay() {                                         // 옵시디언·읽기 화면에서 그 노트가 바뀌었으면 새로 읽는다 (쓰는 중이 아닐 때만)
   if (!D || pending() || saving) return;
   const n = await api('/api/day?date=' + D.date).catch(() => null);
-  if (n && n.date === D.date && n.mtime !== D.mtime && !pending()) { D = n; T = { today: parseTasks(D.sec.today), tomorrow: parseTasks(D.sec.tomorrow) }; render(); }
+  if (n && n.date === D.date && n.mtime !== D.mtime && !pending()) { D = n; T = { today: parseTasks(D.sec.today), tomorrow: parseTasks(D.sec.tomorrow) }; if (SCREEN === 'daily') render(); }
+}
+addEventListener('focus', () => {
+  loadPlans();
+  if (SCREEN === 'read') loadReads();
+  refreshDay();
 });
-addEventListener('resize', () => document.querySelectorAll('#view textarea').forEach(grow));
+addEventListener('resize', () => { document.querySelectorAll('#view textarea').forEach(grow); if (SCREEN === 'read') rReader(); });
 addEventListener('pagehide', flush);
 document.addEventListener('visibilitychange', () => { if (document.hidden) flush(); });
+
+/* ── 화면 고르기: 제목(DAILY)을 누르면 아래에 READING 이 붙어 나온다 ── */
+let SCREEN = 'daily';
+function showMenu(on) {
+  $('#screens').hidden = !on;
+  $('#brand').setAttribute('aria-expanded', on);
+  if (!on) return;
+  document.querySelectorAll('#screens [data-screen]').forEach(b => { b.classList.toggle('on', b.dataset.screen === SCREEN); b.setAttribute('aria-checked', b.dataset.screen === SCREEN); });
+  if (PHONE) return void ($('#readSub').textContent = '맥 앱에서 · 폰 연결은 준비 중');
+  api('/api/reads').then(r => { RD.list = r.list; RD.today = r.today; readSub(); }).catch(() => {});
+}
+const readSub = () => { const n = RD.list.filter(x => !x.read_on).length; $('#readSub').textContent = n ? `읽어야 할 노트 · ${n}개 남음` : '읽어야 할 노트'; };
+document.addEventListener('click', e => { if (!$('#screens').hidden && !e.target.closest('#screens, #brand')) showMenu(false); }, true);
+async function setScreen(s) {
+  showMenu(false);
+  if (s === SCREEN) return;
+  RD.y[SCREEN] = scrollY;
+  if (s === 'read') await flush();
+  SCREEN = s;
+  document.body.classList.toggle('reading', s === 'read');
+  $('#brandText').textContent = s === 'read' ? 'READING' : 'DAILY';
+  $('#view').hidden = $('#daterow').hidden = $('footer').hidden = s === 'read';
+  $('#reads').hidden = s !== 'read';
+  scrollTo(0, RD.y[s] || 0);
+  if (s === 'read') loadReads(); else refreshDay();
+}
+
+/* ── READING: 읽을 글 (Home 「읽어야 할 글」과 같은 기준, server.py read_items).
+   읽음을 누르면 그 노트의 read_on·memo 와 오늘 데일리 노트 「오늘 읽은 글」에 한 줄. 오늘 읽은 글은 그날 안에 되돌릴 수 있다.
+   본문은 맥이 HTML 로 바꿔 주고, 색·글씨는 볼트의 옵시디언 테마(/api/theme.css)를 그대로 쓴다 ── */
+const RD = { list: [], today: '', filter: 'all', open: null, drafts: {}, docs: new Map(), y: { daily: 0, read: 0 } };
+const RGROUPS = { all: '전체', work: '일', clip: '클리핑', concept: '개념·질문' };
+const rWide = () => matchMedia('(min-width:900px)').matches;
+const rIn = x => RD.filter === 'all' || x.g === RD.filter;
+const rUnread = all => RD.list.filter(x => !x.read_on && (all || rIn(x)));
+const rDone = all => RD.list.filter(x => x.read_on && (all || rIn(x)));
+const rItem = rel => RD.list.find(x => x.rel === rel);
+const isDark = () => (document.documentElement.dataset.theme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')) === 'dark';
+function inkMode() { const r = $('#reader'); if (r) { r.classList.toggle('theme-dark', isDark()); r.classList.toggle('theme-light', !isDark()); } }
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', inkMode);
+const CHECK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>';
+// 콜아웃 머리 아이콘: 옵시디언이 쓰는 lucide 아이콘 모양
+const CALLOUT_ICON = {
+  note: '<path d="M21.17 6.81a1 1 0 0 0-3.99-3.99L3.84 16.17a2 2 0 0 0-.5.83l-1.32 4.35a.5.5 0 0 0 .62.62l4.35-1.32a2 2 0 0 0 .83-.5z"/><path d="m15 5 4 4"/>',
+  abstract: '<rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2M12 11h4M12 16h4M8 11h.01M8 16h.01"/>',
+  info: '<circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/>',
+  todo: '<circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/>',
+  tip: '<path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.07-2.14-.22-4.05 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.15.43-2.29 1-3a2.5 2.5 0 0 0 2.5 2.5z"/>',
+  success: '<path d="M20 6 9 17l-5-5"/>',
+  question: '<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3M12 17h.01"/>',
+  warning: '<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3M12 9v4M12 17h.01"/>',
+  failure: '<path d="M18 6 6 18M6 6l12 12"/>',
+  danger: '<path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/>',
+  example: '<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>',
+  quote: '<path d="M16 3a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2 1 1 0 0 1 1 1v1a2 2 0 0 1-2 2 1 1 0 0 0-1 1v2a1 1 0 0 0 1 1 6 6 0 0 0 6-6V5a2 2 0 0 0-2-2z"/><path d="M5 3a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2 1 1 0 0 1 1 1v1a2 2 0 0 1-2 2 1 1 0 0 0-1 1v2a1 1 0 0 0 1 1 6 6 0 0 0 6-6V5a2 2 0 0 0-2-2z"/>',
+};
+const CALLOUT_ALIAS = { summary: 'abstract', tldr: 'abstract', hint: 'tip', important: 'tip', check: 'success', done: 'success', help: 'question', faq: 'question',
+  caution: 'warning', attention: 'warning', fail: 'failure', missing: 'failure', error: 'danger', bug: 'danger', cite: 'quote' };
+
+async function loadReads() {
+  if (PHONE) {
+    $('#rlist').innerHTML = '<div class="empty"><b>아이폰 읽기는 다음 단계에서 맥과 이어요</b>지금은 맥 앱에서 읽을 수 있어요.</div>';
+    return void ($('#reader').hidden = true);
+  }
+  if (!$('#inkcss')) document.head.insertAdjacentHTML('beforeend', '<link id="inkcss" rel="stylesheet" href="/api/theme.css">');
+  const r = await api('/api/reads').catch(e => ({ err: e.message }));
+  if (r.err) return void ($('#rlist').innerHTML = `<div class="empty"><b>목록을 불러오지 못했어요</b>${esc(r.err)}</div>`);
+  RD.list = r.list; RD.today = r.today;
+  rDraw();
+}
+function rRow(x, done) {
+  const sub = done && x.memo ? `<span class="d memo"><b>메모</b>${esc(dash(x.memo))}</span>` : `<span class="d">${esc(dash(x.desc))}</span>`;
+  return `<li class="item${done ? ' done' : ''}${RD.open === x.rel ? ' sel' : ''}">
+    <button type="button" class="ck${done ? ' on' : ''}" data-rck="${esc(x.rel)}" aria-label="${esc(x.title)} 읽음" aria-pressed="${done}"><span>${CHECK}</span></button>
+    <button type="button" class="it" data-rd="${esc(x.rel)}"><span class="t">${esc(dash(x.title))}</span>
+      <span class="meta"><span class="tag g-${x.g}">${esc(dash(x.tag))}</span>${x.created.slice(5)} · ${x.min}분</span>${sub}</button></li>`;
+}
+function rDraw() {
+  const ul = rUnread(), td = rDone(), n = k => RD.list.filter(x => !x.read_on && (k === 'all' || x.g === k)).length;
+  $('#rlist').innerHTML = `<div class="sum"><span class="n">${ul.length}</span><span class="l">남은 글</span><span class="r">오늘 읽음 ${rDone(true).length}</span></div>
+    <div class="fchips">${Object.entries(RGROUPS).map(([k, v]) => `<button type="button" class="fchip${RD.filter === k ? ' on' : ''}" data-rf="${k}" aria-pressed="${RD.filter === k}">${v}<i>${n(k)}</i></button>`).join('')}</div>
+    ${ul.length ? `<ul class="items">${ul.map(x => rRow(x, false)).join('')}</ul>` : '<div class="empty"><b>다 읽었어요</b>새 글이 들어오면 여기에 떠요.</div>'}
+    ${td.length ? `<h3 class="sec">오늘 읽은 글<span>${td.length}개</span></h3><ul class="items">${td.map(x => rRow(x, true)).join('')}</ul>
+    <p class="hint">체크를 다시 누르면 오늘 안에는 되돌릴 수 있어요. 내일이면 목록에서 빠져요.</p>` : ''}`;
+  readSub();
+  rReader();
+}
+// 본문 칸: 같은 글이면 위아래 줄(몇 번째·읽음 단추·메모)만 고치고 본문과 스크롤은 그대로 둔다
+function rReader() {
+  const r = $('#reader'), wide = rWide();
+  if (wide && !rItem(RD.open)) RD.open = rUnread()[0]?.rel || rDone()[0]?.rel || null;
+  r.classList.toggle('open', !!RD.open && !wide);
+  inkMode();
+  const x = rItem(RD.open);
+  if (!x) {
+    if (wide) { r.dataset.rel = ''; r.innerHTML = '<div class="markdown-preview-view rpane"><div class="rempty"><b>다 읽었어요</b>오늘 읽은 글은 왼쪽에서 다시 열 수 있어요.</div></div>'; }
+    return;                                                           // 좁은 화면은 밀려 나가는 동안 보던 글을 그대로 둔다
+  }
+  if (r.dataset.rel !== x.rel) {
+    r.dataset.rel = x.rel;
+    r.innerHTML = `<div class="markdown-preview-view markdown-rendered rpane">
+      <div class="rhead"><button type="button" class="rback" data-r="back">${svg('<path d="m15 6-6 6 6 6"/>')}목록</button><span class="rpos"></span>
+        <button type="button" class="icon-btn" data-r="obs" aria-label="옵시디언에서 열기" title="옵시디언에서 열기">${svg('<path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/>')}</button></div>
+      <div class="rscroll"><div class="rdoc"><div class="rcrumb">${esc(x.folder)} · 읽는 데 ${x.min}분</div><div class="inline-title">${esc(x.title)}</div>
+        <div class="rbody"><p class="rwait">불러오는 중</p></div></div></div>
+      <div class="rfoot"><input id="rmemo" type="text" autocomplete="off" enterkeyhint="done" aria-label="한 줄 메모" placeholder="한 줄 메모 (안 써도 돼요)"><button type="button" class="main" data-r="done"></button></div></div>`;
+    rBody(x.rel);
+  }
+  const ul = rUnread(), i = ul.indexOf(x), b = r.querySelector('[data-r=done]'), m = $('#rmemo');
+  r.querySelector('.rpos').textContent = x.read_on ? '오늘 읽음' : i >= 0 ? `${i + 1} / ${ul.length}` : '';
+  b.textContent = x.read_on ? '읽음 취소' : '읽음';
+  b.classList.toggle('undo', !!x.read_on);
+  if (document.activeElement !== m) m.value = x.read_on ? x.memo : RD.drafts[x.rel] || '';
+}
+async function rBody(rel) {
+  let doc = RD.docs.get(rel);
+  if (!doc) {
+    doc = await api('/api/read?rel=' + encodeURIComponent(rel)).catch(e => ({ err: e.message }));
+    if (!doc.err) RD.docs.set(rel, doc);
+  }
+  const r = $('#reader'), box = r.querySelector('.rbody');
+  if (r.dataset.rel !== rel || !box) return;                          // 그새 다른 글을 열었다
+  if (doc.err) return void (box.innerHTML = `<p class="rwait">본문을 열지 못했어요 · ${esc(doc.err)}</p>`);
+  const p = doc.props, row = (k, v) => v ? `<dt>${k}</dt><dd>${v}</dd>` : '';
+  box.insertAdjacentHTML('beforebegin', `<dl class="rprops">${row(p.channel ? 'channel' : '', esc(p.channel || ''))}${row('description', esc(dash(p.description || '')))}${row('created', esc(p.created || ''))}${row('source', p.source && /^https?:\/\//.test(p.source) ? `<a class="external-link" href="${esc(p.source)}">${esc(rUrl(p.source))}</a>` : '')}</dl>`);
+  box.innerHTML = doc.html;
+  for (const n of [...box.children]) { const w = document.createElement('div'); w.className = 'el-' + n.tagName.toLowerCase(); n.replaceWith(w); w.append(n); }   // 옵시디언처럼 덩어리마다 .el-* (테마의 제목 간격 규칙이 이걸 본다)
+  box.querySelectorAll('.callout').forEach(c => {
+    const t = c.dataset.callout, ic = c.querySelector(':scope > .callout-title > .callout-icon'), fold = c.querySelector(':scope > .callout-title > .callout-fold');
+    if (ic) ic.innerHTML = svg(CALLOUT_ICON[CALLOUT_ALIAS[t] || t] || CALLOUT_ICON.note);
+    if (fold) fold.innerHTML = svg('<path d="m6 9 6 6 6-6"/>');
+  });
+}
+const rUrl = u => { try { return decodeURI(u); } catch (e) { return u; } };   // 주소의 %EC.. 를 한글로 보이게
+function rOpen(rel) {
+  RD.open = rel;
+  rDraw();
+  if (rel) $('#reader .rscroll')?.scrollTo(0, 0);
+}
+async function rMark(x, on, memo) {
+  const before = { read_on: x.read_on, memo: x.memo };
+  x.read_on = on ? RD.today : ''; x.memo = on ? memo : '';
+  try { const r = await api('/api/readmark', { rel: x.rel, on, memo }); if (on) x.read_on = RD.today = r.today; return true; }
+  catch (e) { Object.assign(x, before); toast('저장하지 못했어요 · ' + e.message); rDraw(); return false; }
+}
+async function rRead(x, fromReader) {                                  // 읽음: 본문에서 누르면 다음 글로 (좁은 화면도)
+  const order = rUnread().map(y => y.rel), at = order.indexOf(x.rel), rest = order.filter(y => y !== x.rel);
+  const memo = (fromReader ? $('#rmemo').value : RD.drafts[x.rel] || '').replace(/\s+/g, ' ').trim();
+  const p = rMark(x, true, memo);
+  delete RD.drafts[x.rel];
+  if (fromReader) RD.open = rest[at] ?? rest[0] ?? (rWide() ? x.rel : null);
+  rDraw();
+  if (fromReader) $('#reader .rscroll')?.scrollTo(0, 0);
+  if (await p) toast('읽음 · 오늘 데일리 노트에 한 줄 남겼어요');
+}
+async function rUndo(x) {
+  if (x.memo) RD.drafts[x.rel] = x.memo;                              // 쓴 메모는 남겨 둔다
+  const p = rMark(x, false, '');
+  rDraw();
+  if (await p) toast('읽음을 취소했어요');
+}
+async function rMemo(x, v) {
+  v = v.replace(/\s+/g, ' ').trim();
+  if (!x.read_on || x.memo === v) return;
+  const p = rMark(x, true, v);
+  rDraw();
+  if (await p) toast('메모를 고쳤어요');
+}
+$('#reads').addEventListener('click', e => {
+  const a = e.target.closest('a');
+  if (a) {                                                            // [[링크]] 는 목록에 있으면 여기서, 없으면 옵시디언에서. 웹 링크는 브라우저로
+    e.preventDefault();
+    if (a.classList.contains('internal-link')) {
+      const t = a.dataset.href.normalize('NFC').toLowerCase(), hit = RD.list.find(x => x.title.toLowerCase() === t || x.rel.toLowerCase() === t + '.md');
+      return hit ? rOpen(hit.rel) : api('/api/open', { rel: a.dataset.href }).catch(err => toast(err.message));
+    }
+    if (/^https?:/.test(a.href)) return PHONE ? open(a.href) : api('/api/openurl', { url: a.href }).catch(err => toast(err.message));
+    return;
+  }
+  const b = e.target.closest('button');
+  if (!b) return;
+  const d = b.dataset, x = rItem(d.rck || d.rd || RD.open);
+  if (d.rf) { RD.filter = d.rf; if (rWide() && rItem(RD.open) && !rIn(rItem(RD.open))) RD.open = null; return rDraw(); }
+  if (d.rck && x) return x.read_on ? rUndo(x) : rRead(x, false);
+  if (d.rd) return rOpen(d.rd);
+  if (d.r === 'back') return rOpen(null);
+  if (d.r === 'obs' && x) return api('/api/open', { rel: x.rel }).catch(err => toast(err.message));
+  if (d.r === 'done' && x) return x.read_on ? rUndo(x) : rRead(x, true);
+});
+$('#reads').addEventListener('input', e => { const x = rItem(RD.open); if (e.target.id === 'rmemo' && x && !x.read_on) RD.drafts[x.rel] = e.target.value; });
+$('#reads').addEventListener('change', e => { const x = rItem(RD.open); if (e.target.id === 'rmemo' && x) rMemo(x, e.target.value); });
+$('#reads').addEventListener('keydown', e => {
+  if (e.target.id !== 'rmemo' || e.key !== 'Enter' || e.isComposing || e.keyCode === 229) return;   // 한글 조합 중 Enter 는 글자 확정
+  e.preventDefault();
+  const x = rItem(RD.open);
+  if (!x) return;
+  if (x.read_on) e.target.blur(); else rRead(x, true);
+});
 
 /* ── 설정 시트 ── */
 const THEMES = ['system', 'light', 'dark'];
@@ -1046,6 +1395,7 @@ function setTheme(t) {
   theme = t;
   if (t === 'system') document.documentElement.removeAttribute('data-theme'); else document.documentElement.setAttribute('data-theme', t);
   $('#theme').innerHTML = ICON[t];
+  inkMode();
   $('#themeMode').textContent = { system: '기기 설정에 맞춤', light: '밝게', dark: '어둡게' }[t];
   try { localStorage.setItem('theme', t); } catch (e) {}
 }

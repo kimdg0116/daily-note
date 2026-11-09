@@ -15,7 +15,7 @@ from urllib.parse import urlparse, parse_qs, quote
 
 import yaml
 
-PORT = 8749
+PORT = int(os.environ.get('PORT') or 8749)   # 시험은 PORT=8750 + 사본 볼트 (진짜 서버가 8749 를 쓰는 중이라)
 HERE = os.path.dirname(os.path.abspath(__file__))
 VAULT = os.environ.get('VAULT') or os.path.expanduser('~/Obsidian_Dongkyu')
 DAILY_REL = '04 Life/Planner/Daily'
@@ -680,6 +680,266 @@ def sync_loop():
         time.sleep(2)                         # 쓰는 중 저장이 몰려도 2초에 한 번
 
 
+# ── 읽을 글 (READING 화면): Home 「읽어야 할 글」과 같은 기준 (볼트 90 System/scripts/read-queue.js) ──
+# type 이 note·literature 이고 read_on 이 없거나 오늘인 노트. 읽음을 누르면 그 노트의 read_on·memo 두 줄과
+# 오늘 데일리 노트의 「오늘 읽은 글」 콜아웃 줄만 고친다. 본문은 맥에서 HTML 로 바꿔 보내고, 색·크기는 볼트의 옵시디언 테마가 정한다
+
+READ_GROUPS = (('work', ('01 Work · 의학물리',)),
+               ('clip', ('03 Economy/메르의 블로그', '03 Economy/Valley AI/피드 정리', '03 Economy/Valley AI/시황', '04 Life/읽을거리')),
+               ('concept', ('03 Economy/개념', '04 Life/시사 교양')))
+READ_HEAD = '> [!abstract]- 오늘 읽은 글'
+READ_HEAD_RE = re.compile(r'^>\s?\[!abstract\][+-]?\s*오늘 읽은 글\s*$')
+IMG_EXT = ('.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg')
+
+
+def nfc(s):
+    return unicodedata.normalize('NFC', s)
+
+
+def read_group(folder, f):
+    for g, dirs in READ_GROUPS:
+        if any(folder == x or folder.startswith(x + '/') for x in dirs):
+            return g
+    return 'concept' if f.get('origin') == 'question' else None
+
+
+READ_CACHE = {}                       # 파일 경로 → (mtime, 항목 또는 None). 볼트 노트 1000개를 매번 읽지 않게
+
+
+def read_item(p, folder, fn):
+    fm, body = split(open(p, encoding='utf-8').read())
+    if not re.search(r'^type:\s*["\']?(note|literature)["\']?\s*$', fm, re.M):
+        return None
+    try:
+        f = yaml.safe_load(fm) or {}
+    except yaml.YAMLError:
+        return None
+    g = read_group(folder, f)
+    if not g:
+        return None
+    last, ro = re.sub(r'^\d+\s+', '', folder.rsplit('/', 1)[-1]), str(f.get('read_on') or '')[:10]
+    return {'rel': f'{folder}/{nfc(fn)}' if folder else nfc(fn), 'title': nfc(fn[:-3]), 'g': g, 'folder': folder,
+            'tag': str(f.get('channel') or last) if g == 'clip' else last,
+            'desc': str(f.get('description') or ''), 'created': str(f.get('created') or '')[:10],
+            'read_on': ro, 'memo': str(f.get('memo') or '') if ro else '',
+            'min': max(1, round(len(body) / 500))}               # 한글 1분에 500자쯤
+
+
+def read_items():
+    """읽을 글 목록 (정리일 최근 순). 오늘 읽은 글도 남긴다 (그날 안에는 되돌릴 수 있게)"""
+    today_s, out = date.today().isoformat(), []
+    for root, dirs, files in os.walk(VAULT):
+        dirs[:] = [x for x in dirs if not x.startswith('.')]
+        folder = nfc(os.path.relpath(root, VAULT)).replace(os.sep, '/').lstrip('.')
+        for fn in files:
+            if not fn.endswith('.md'):
+                continue
+            p = os.path.join(root, fn)
+            try:
+                mt = os.path.getmtime(p)
+                if READ_CACHE.get(p, (None,))[0] != mt:
+                    READ_CACHE[p] = (mt, read_item(p, folder, fn))
+            except (OSError, UnicodeDecodeError):
+                continue
+            it = READ_CACHE[p][1]
+            if it and (not it['read_on'] or it['read_on'] == today_s):
+                out.append(it)
+    return sorted(out, key=lambda x: (x['created'], x['title']), reverse=True)
+
+
+def vault_md(rel):
+    """볼트 안에 있는 .md 파일 경로만 (밖으로 나가는 길은 막는다)"""
+    rel = nfc(str(rel))
+    if not rel.endswith('.md') or rel.startswith(('/', '.')) or '..' in rel.split('/'):
+        raise ValueError('잘못된 노트')
+    p = os.path.join(VAULT, rel)
+    if not os.path.isfile(p) or not os.path.realpath(p).startswith(os.path.realpath(VAULT) + os.sep):
+        raise ValueError('노트가 없어요')
+    return p
+
+
+def fm_del(fm, key):
+    lines = fm.split('\n')
+    i = next((k for k, l in enumerate(lines) if re.match(rf'^{re.escape(key)}:(\s|$)', l)), None)
+    if i is None:
+        return fm
+    j = i + 1
+    while j < len(lines) and not TOP.match(lines[j]):
+        j += 1
+    return '\n'.join(lines[:i] + lines[j:])
+
+
+def read_lines_set(lines, title, memo):
+    """데일리 노트 본문의 「오늘 읽은 글」 콜아웃에서 그 글 줄을 넣거나 고치거나(memo 문자열) 뺀다(memo None).
+    콜아웃이 없으면 「오늘 작성·수정한 노트」 바로 아래(없으면 하루 마무리 위)에 만들고, 마지막 줄이 빠지면 콜아웃도 지운다"""
+    link = f'> - [[{title}]]'
+    h = next((k for k, l in enumerate(lines) if READ_HEAD_RE.match(l)), None)
+    if h is None:
+        if memo is None:
+            return lines
+        a = next((k for k, l in enumerate(lines) if l.startswith('>') and '오늘 작성·수정한 노트' in l), None)
+        if a is not None:
+            e = a + 1
+            while e < len(lines) and lines[e].startswith('>'):
+                e += 1
+            lines, h = lines[:e] + ['', READ_HEAD] + lines[e:], e + 1
+        else:
+            e = next((k for k, l in enumerate(lines) if l.startswith('>') and '하루 마무리' in l), None)
+            if e is None:
+                lines, h = lines + ['', READ_HEAD], len(lines) + 1
+            else:
+                lines, h = lines[:e] + [READ_HEAD, ''] + lines[e:], e
+    end = h + 1
+    while end < len(lines) and lines[end].startswith('>'):
+        end += 1
+    items = lines[h + 1:end]
+    hit = next((i for i, l in enumerate(items) if l == link or l.startswith(link + ' ')), None)
+    if memo is None:
+        if hit is not None:
+            del items[hit]
+    else:
+        new = link + (f' - {memo}' if memo else '')
+        if hit is None:
+            items.append(new)
+        else:
+            items[hit] = new
+    if not items:                                  # 다 빠졌으면 콜아웃과 붙여 넣었던 빈 줄까지 (위, 없으면 아래)
+        s = h - 1 if h > 0 and not lines[h - 1].strip() else h
+        if s == h and end < len(lines) and not lines[end].strip():
+            end += 1
+        return lines[:s] + lines[end:]
+    return lines[:h + 1] + items + lines[end:]
+
+
+def read_mark(rel, on, memo):
+    p = vault_md(rel)
+    memo = ' '.join(str(memo or '').split())[:300]
+    with FILE_LOCK:
+        fm, body = split(open(p, encoding='utf-8').read())
+        if on:
+            fm = fm_set(fm, 'read_on', date.today())
+            fm = fm_set(fm, 'memo', memo) if memo else fm_del(fm, 'memo')
+        else:                                      # Home 체크를 풀 때처럼 read_on 은 빈 값으로 남긴다
+            fm = fm_del(fm_set(fm, 'read_on', None), 'memo')
+        write(p, f'---\n{fm}\n---\n{body}')
+    d = date.today()
+    if on and not os.path.exists(path(d)):         # 오늘 노트가 없으면 데일리 템플릿으로 만든다 (쓰기 시작할 때와 같이)
+        created, _ = save_day(d, {}, {})
+        if created:
+            start_quote(d.isoformat())
+    if os.path.exists(path(d)):
+        with FILE_LOCK:
+            fm, body = split(open(path(d), encoding='utf-8').read())
+            lines = read_lines_set(body.split('\n'), nfc(os.path.basename(p))[:-3], memo if on else None)
+            write(path(d), f'---\n{fm}\n---\n' + '\n'.join(lines))
+
+
+# 옵시디언 마크다운 → HTML. 옵시디언에만 있는 문법(콜아웃·[[링크]]·![[그림]]·==형광펜==·%%주석%%)은 앞뒤로 바꿔 끼운다
+try:
+    from markdown_it import MarkdownIt
+    MD = MarkdownIt('commonmark', {'html': False, 'breaks': True}).enable(['table', 'strikethrough'])   # 노트 속 HTML 은 글자로
+except ImportError:
+    MD = None
+CALLOUT = re.compile(r'^>\s?\[!([\w-]+)\]([+-]?)\s*(.*)$')
+FENCE = re.compile(r'^\s*(```|~~~)')
+
+
+def md_inline(s):
+    def wiki(m):
+        embed, target, alias = m.group(1), m.group(2).strip(), (m.group(3) or '').strip()
+        if embed and target.lower().endswith(IMG_EXT):
+            return f'![](<img:{target}>)'
+        label = (alias if alias and not alias.isdigit() else target.replace('#', ' > ')).replace('[', '\\[').replace(']', '\\]')
+        return f'[{label}](<wiki:{target.split("#")[0]}>)'
+    s = re.sub(r'(!?)\[\[([^\]|]+)(?:\|([^\]]*))?\]\]', wiki, s)
+    return re.sub(r'==(?=\S)(.+?)(?<=\S)==', '\x01\\1\x02', s)
+
+
+def md_blocks(lines):
+    """콜아웃은 따로 떼어 안쪽을 다시 그린다 (콜아웃 안 콜아웃도)"""
+    out, buf, fence, i = [], [], False, 0
+    flush = lambda: out.append(md_html(MD.render('\n'.join(buf)))) if buf else None
+    while i < len(lines):
+        l = lines[i]
+        if FENCE.match(l):
+            fence = not fence
+        m = None if fence else CALLOUT.match(l)
+        if not m:
+            buf.append(l if fence else md_inline(l))
+            i += 1
+            continue
+        flush()
+        buf, j = [], i + 1
+        while j < len(lines) and lines[j].startswith('>'):
+            j += 1
+        typ, fold = m.group(1).lower(), m.group(2)
+        title = md_html(MD.renderInline(md_inline(m.group(3)))) if m.group(3).strip() else esc_html(typ.capitalize())
+        inner = md_blocks([re.sub(r'^>\s?', '', x) for x in lines[i + 1:j]])
+        head = f'<div class="callout-icon"></div><div class="callout-title-inner">{title}</div>'
+        if fold:
+            out.append(f'<details class="callout" data-callout="{esc_html(typ)}"{" open" if fold == "+" else ""}><summary class="callout-title">{head}'
+                       f'<div class="callout-fold"></div></summary><div class="callout-content">{inner}</div></details>')
+        else:
+            out.append(f'<div class="callout" data-callout="{esc_html(typ)}"><div class="callout-title">{head}</div><div class="callout-content">{inner}</div></div>')
+        i = j
+    flush()
+    return ''.join(out)
+
+
+def esc_html(s):
+    return s.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;').replace('"', '&quot;')
+
+
+def md_html(h):
+    from urllib.parse import unquote
+    h = re.sub(r'<a href="wiki:([^"]*)">', lambda m: f'<a class="internal-link" data-href="{esc_html(unquote(m.group(1)))}">', h)
+    h = re.sub(r'<a href="(https?:[^"]*)">', r'<a class="external-link" href="\1">', h)
+    h = re.sub(r'<img src="img:([^"]*)"', lambda m: f'<img src="/api/img?name={quote(unquote(m.group(1)))}"', h)
+    h = re.sub(r'<li>(<p>)?\[([ xX])\]\s', lambda m: f'<li class="task-list-item">{m.group(1) or ""}<input type="checkbox" disabled{" checked" if m.group(2) != " " else ""}> ', h)
+    h = re.sub(r'<pre><code class="language-dataview(?:js)?">.*?</code></pre>', '<div class="dv-skip">Dataview 목록은 옵시디언에서 보여요</div>', h, flags=re.S)
+    return h.replace('\x01', '<mark>').replace('\x02', '</mark>')
+
+
+def read_doc(rel):
+    p = vault_md(rel)
+    fm, body = split(open(p, encoding='utf-8').read())
+    f = yaml.safe_load(fm) or {}
+    if MD is None:
+        raise ValueError('이 맥의 파이썬에 markdown-it-py 가 없어요')
+    body = re.sub(r'%%.*?%%', '', body, flags=re.S)
+    return {'rel': nfc(rel), 'html': md_blocks(body.split('\n')),
+            'props': {k: str(f[k])[:10] if k == 'created' else str(f[k]) for k in ('channel', 'description', 'created', 'source') if f.get(k)}}
+
+
+def theme_css():
+    """볼트의 옵시디언 테마를 .ink 안에만 걸리게 (body·:root·.theme-* → .ink, 나머지는 .ink 아래로)"""
+    try:
+        name = json.load(open(os.path.join(VAULT, '.obsidian', 'appearance.json'), encoding='utf-8')).get('cssTheme') or ''
+        css = open(os.path.join(VAULT, '.obsidian', 'themes', name, 'theme.css'), encoding='utf-8').read()
+    except (OSError, ValueError):
+        return ''
+    css, out = re.sub(r'/\*.*?\*/', '', css, flags=re.S), []
+
+    def one(s):
+        s = s.strip()
+        for head in (':root', 'body'):
+            if s.startswith(head):
+                return '.ink' + s[len(head):]
+        return '.ink' + s if s.startswith(('.theme-', ':is(.theme-')) else '.ink ' + s
+
+    for sel, decl in re.findall(r'([^{}]+)\{([^{}]*)\}', css):
+        parts, depth, cur = [], 0, ''
+        for ch in sel:                             # :is(a, b) 안의 쉼표는 나누지 않는다
+            depth += (ch == '(') - (ch == ')')
+            if ch == ',' and depth == 0:
+                parts.append(cur)
+                cur = ''
+            else:
+                cur += ch
+        out.append(', '.join(one(x) for x in parts + [cur] if x.strip()) + ' {' + decl + '}')
+    return '\n'.join(out)
+
+
 # ── HTTP ──────────────────────────────────────────────────
 
 class H(BaseHTTPRequestHandler):
@@ -733,15 +993,24 @@ class H(BaseHTTPRequestHandler):
             if j.get('started'):
                 j['elapsed'] = int((j.get('ended') or time.time()) - j['started'])
             return self.send(200, j)
-        if u.path == '/api/img':
+        if u.path == '/api/img':             # 첨부파일 폴더(하위 폴더까지)의 그림을 이름으로 (옵시디언 ![[이름]] 처럼)
             name = q.get('name', '')
-            want = unicodedata.normalize('NFC', name)
-            f = next((f for f in (os.listdir(ATTACH) if os.path.isdir(ATTACH) and '/' not in name else [])
-                      if unicodedata.normalize('NFC', f) == want), None)
+            want = nfc(name)
+            f = next((os.path.join(r, x) for r, _, fs in (os.walk(ATTACH) if '/' not in name and want.lower().endswith(IMG_EXT) else [])
+                      for x in fs if nfc(x) == want), None)
             if not f:
                 return self.send(404, {'error': 'not found'})
             ext = f.rsplit('.', 1)[-1].lower()
-            return self.send(200, open(os.path.join(ATTACH, f), 'rb').read(), 'image/' + ('jpeg' if ext == 'jpg' else ext))
+            return self.send(200, open(f, 'rb').read(), 'image/' + {'jpg': 'jpeg', 'svg': 'svg+xml'}.get(ext, ext))
+        if u.path == '/api/reads':           # READING 목록
+            return self.send(200, {'list': read_items(), 'today': date.today().isoformat()})
+        if u.path == '/api/read':            # 노트 본문 (HTML)
+            try:
+                return self.send(200, read_doc(q.get('rel', '')))
+            except (OSError, ValueError, yaml.YAMLError) as e:
+                return self.send(404, {'error': str(e)})
+        if u.path == '/api/theme.css':       # 볼트의 옵시디언 테마 (.ink 안에만)
+            return self.send(200, theme_css().encode(), 'text/css; charset=utf-8')
         self.send(404, {'error': 'not found'})
 
     def do_POST(self):
@@ -762,7 +1031,22 @@ class H(BaseHTTPRequestHandler):
                 return self.send(500, {'error': str(e)})
             SYNC_WAKE.set()
             return self.send(200, {'list': lst})
-        if path_ != '/api/open' and not DATE.match(d):
+        if path_ == '/api/readmark':         # 읽음 · 메모 · 되돌리기
+            if not isinstance(body.get('on'), bool) or not isinstance(body.get('memo', ''), str):
+                return self.send(400, {'error': '잘못된 요청'})
+            try:
+                read_mark(body.get('rel', ''), body['on'], body.get('memo', ''))
+            except (OSError, ValueError) as e:
+                return self.send(500, {'error': str(e)})
+            SYNC_WAKE.set()
+            return self.send(200, {'ok': True, 'today': date.today().isoformat()})
+        if path_ == '/api/openurl':          # 노트 속 웹 링크는 기본 브라우저로 (앱 창이 그 사이트로 넘어가지 않게)
+            url = str(body.get('url', ''))
+            if not re.match(r'^https?://', url):
+                return self.send(400, {'error': '잘못된 요청'})
+            subprocess.Popen(['open', url])
+            return self.send(200, {'ok': True})
+        if path_ not in ('/api/open',) and not DATE.match(d):
             return self.send(400, {'error': '날짜가 이상해요'})
         if path_ == '/api/save':
             fmc, secc = body.get('fm') or {}, body.get('sec') or {}
@@ -791,8 +1075,8 @@ class H(BaseHTTPRequestHandler):
                 return self.send(409, {'error': '다른 명언을 정리하는 중이에요'})
             return self.send(200, {'ok': True})
         if path_ == '/api/open':
-            rel = str(body.get('rel', ''))
-            if not rel.startswith('04 Life/') or '..' in rel:
+            rel = str(body.get('rel', ''))            # 볼트 안 경로나 노트 이름 ([[링크]] 처럼 옵시디언이 찾는다)
+            if not rel or rel.startswith(('/', '.')) or '..' in rel.split('/') or len(rel) > 300 or re.search(r'[\x00-\x1f]', rel):
                 return self.send(400, {'error': '잘못된 요청'})
             subprocess.Popen(['open', f'obsidian://open?vault={quote(os.path.basename(VAULT))}&file={quote(rel)}'])
             return self.send(200, {'ok': True})
