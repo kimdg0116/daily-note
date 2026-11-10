@@ -559,7 +559,7 @@ SYNC_URL = os.environ.get('SYNC_URL') or 'https://script.google.com/macros/s/AKf
 SYNC_STATE = os.path.join(VAULT, '.daily-sync.json') if os.environ.get('VAULT') else os.path.join(HERE, 'sync', 'state.json')   # 올린 노트의 mtime·받은 수정 확인 (git 제외)
 SYNC = {'at': 0, 'err': ''}
 BATCH_N, BATCH_BYTES = 80, 250_000     # 폰이 노트를 처음 받아 갈 때 한 묶음 (우체통 상자 300KB 안에)
-RPUT_BYTES = 45_000                    # 폰이 달라는 읽을 글 본문을 한 번에 이만큼 (우체통 본문 상자 90KB 안에, 압축 크기)
+RPUT_BYTES = 500_000                   # 폰이 달라는 읽을 글 본문을 한 번에 이만큼 (우체통 캐시로, 압축 크기)
 IPUT_BYTES = 2_000_000                 # 폰이 달라는 그림을 한 번에 이만큼 (우체통 캐시로, data URL 글자 수)
 SYNC_WAKE = threading.Event()
 
@@ -667,7 +667,7 @@ def sync_once(code):
         raise RuntimeError('연결 코드가 맞지 않아요' if r['err'] == 'code' else r['err'])
     up.update({d: mt[d] for d in put})
     st.update(done=[], pdone=[], dh=dh, mh=mh, qh=qh, ph=ph, want=r.get('want'), rh=rh, th=th, rdone=[],
-              rq=[x for x in (r.get('rq') or []) if isinstance(x, str)][:60],
+              rq=[x for x in (r.get('rq') or []) if isinstance(x, str)][:400],
               iq=[x for x in (r.get('iq') or []) if isinstance(x, str)][:200])
     for rel, m in (r.get('rob') or {}).items():                         # 폰에서 누른 읽음 → 노트에, 다음 번에 받았다고 알린다
         try:

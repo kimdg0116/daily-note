@@ -16,7 +16,8 @@
  * 위젯 → {code, op:'widget', today, yday}   → {today:{today?, tomorrow?}|null, yday:…}   할 일 칸만, 읽기만
  * 폰 → {code, op:'edit', date, fm, sec, t}  → {ok}       fm/sec = {키: {v: 새 값, b: 폰이 본 값}}
  * 폰 → {code, op:'plan', ops}             → {ok}       일정 바꾸기 [{id, act:'add'|'toggle', d, n, on?}] (맥이 일정 노트에 쓴다)
- * 폰 → {code, op:'rwant', rels}            → {ok}       읽을 글 본문을 달라고 (맥이 다음에 들를 때 rb 상자에 넣는다)
+ * 폰 → {code, op:'rwant', rels}            → {ok}       읽을 글 본문을 달라고 (맥이 다음에 들를 때 캐시에 넣는다)
+ * 폰 → {code, op:'rget', rels}             → {docs:{rel: 본문}}   캐시에 들어온 본문만 (없으면 빠진다 → 폰이 다시 달라고 한다)
  * 폰 → {code, op:'rmark', marks}           → {ok}       읽음·메모·되돌리기 [{rel, on, memo, day, t}] (같은 글은 나중 것만, 맥이 노트에 쓴다)
  * 폰 → {code, op:'iwant', names}           → {ok}       본문 속 볼트 그림을 달라고 (맥이 줄여서 캐시에 넣는다)
  * 폰 → {code, op:'img', names}             → {imgs:{이름: data URL}}   캐시에 들어온 그림만 (없으면 빠진다 → 폰이 다시 달라고 한다)
@@ -24,14 +25,14 @@
  *        quotes = 명언 모음 {list, favs}, plans = 일정 [{d, n, x}], po = 아직 맥이 안 쓴 일정 바꾸기, pdone = 맥이 쓴 것의 id
  *        resync = {to: 이번 묶음 마지막 날짜, done: 끝인지}, done = [[날짜, 'fm'|'sec', 키, t]]
  *        reads = 읽을 글 목록, theme = 옵시디언 테마 CSS, rput = {id: 본문}, rqdone = 넣은(또는 없는) 글, rdone = [[rel, t]] 맥이 노트에 쓴 읽음
- * 읽을 글 본문은 노트 상자와 따로 rb 상자(RBOX)에 둔다. 넘치면 오래된 것부터 버리고, 못 받은 폰은 다시 달라고 한다
- * 그림(iput)은 Script Properties(500KB)에 안 넣고 Script Cache 에 6시간만 둔다 (값 하나 100KB 까지라 90000자씩 나눈다). 권한이 더 필요 없다
+ * 읽을 글 본문(rput)과 그림(iput)은 Script Properties(500KB)에 안 넣고 Script Cache 에 6시간만 둔다 (값 하나 100KB 까지라 90000자씩 나눈다).
+ * 폰이 목록의 본문을 전부(압축 1~2MB) 받아 둘 수 있게. 권한이 더 필요 없다
  *
  * 반영: cd sync && ~/Code/apps/dosimetrist-calendar-server/tools/node_modules/.bin/clasp push -f
  *       && …/clasp redeploy <배포 ID>   (배포 ID 는 server.py·index.html 의 SYNC_URL, URL 유지)
  */
-const IMG_TTL = 21600, ICH = 90000;                           // 그림: 캐시에 6시간, 90000자 조각
-const CH = 8000, BOX = 280000, RBOX = 90000;                 // 노트 상자 · 읽을 글 본문 상자 한도 (전체 저장 한도 500KB 안에 목록·테마까지)
+const IMG_TTL = 21600, ICH = 90000;                           // 그림·본문: 캐시에 6시간, 90000자 조각
+const CH = 8000, BOX = 280000;                               // 노트 상자 한도 (전체 저장 한도 500KB 안에 목록·테마까지)
 let ALL, W, DEL;                                             // 요청마다: 다 읽어 두고, 쓸 것·지울 것을 모아 한 번에
 
 function doPost(e) {
@@ -45,7 +46,7 @@ function doPost(e) {
   lock.waitLock(25000);
   try {
     const p = PropertiesService.getScriptProperties();
-    ALL = p.getProperties(); W = {}; DEL = Object.keys(ALL).filter(k => /^(d:|idx#|sheet$)/.test(k));   // 예전 방식(노트 보관)의 흔적은 지운다
+    ALL = p.getProperties(); W = {}; DEL = Object.keys(ALL).filter(k => /^(d:|idx#|sheet$|ri#|rb:)/.test(k));   // 예전 방식(노트 보관, 본문 상자)의 흔적은 지운다
     const r = OPS[q.op](q);
     if (Object.keys(W).length) p.setProperties(W);
     DEL.forEach(k => p.deleteProperty(k));
@@ -63,9 +64,6 @@ const OPS = {
     for (const d in bi) if (bi[d][0] > since) r.docs[d] = getJ_('b:' + d);
     for (const d in ob) r.wait[d] = pending_(ob[d]);
     if ((meta.mrev || 0) > since || q.meta) { r.dates = meta.dates || []; r.mind = meta.mind || []; r.quotes = meta.quotes || null; r.plans = meta.plans || null; r.reads = meta.reads || null; r.theme = meta.theme || null; }   // meta = 놓친 폰이 다시 달라고
-    const ri = getJ_('ri') || {};
-    r.rdocs = {};
-    for (const id in ri) if (ri[id][0] > since) r.rdocs[ri[id][2]] = getJ_('rb:' + id);
     r.rwait = Object.keys(getJ_('rob') || {});              // 아직 맥이 노트에 안 쓴 읽음
     r.pwait = (getJ_('po') || []).map(o => o.id);
     const want = getJ_('want');
@@ -109,7 +107,7 @@ const OPS = {
   rwant(q) {                                                 // 폰이 달라는 읽을 글 본문 (맥이 넣으면 rqdone 으로 지운다)
     const rq = getJ_('rq') || [];
     for (const rel of q.rels || []) if (typeof rel === 'string' && rel && !rq.includes(rel)) rq.push(rel);
-    setJ_('rq', rq.slice(-60));
+    setJ_('rq', rq.slice(-400));
     return { ok: true };
   },
 
@@ -128,17 +126,18 @@ const OPS = {
     return { ok: true };
   },
 
-  img(q) {                                                   // 캐시에 있는 그림 (조각이 하나라도 없으면 빼고)
-    const cache = CacheService.getScriptCache(), out = {};
+  img(q) {                                                   // 캐시에 있는 그림
     const names = (q.names || []).filter(n => typeof n === 'string').slice(0, 12);
-    const heads = cache.getAll(names.map(n => 'i:' + n + '#n'));
-    for (const n of names) {
-      const k = +heads['i:' + n + '#n'] || 0, keys = [];
-      for (let i = 0; i < k; i++) keys.push('i:' + n + '#' + i);
-      const parts = k ? cache.getAll(keys) : {};
-      if (k && keys.every(x => parts[x] != null)) out[n] = keys.map(x => parts[x]).join('');
-    }
+    const got = cget_(names.map(n => 'i:' + n)), out = {};
+    names.forEach(n => { if (got['i:' + n] != null) out[n] = got['i:' + n]; });
     return { imgs: out };
+  },
+
+  rget(q) {                                                  // 캐시에 있는 읽을 글 본문
+    const rels = (q.rels || []).filter(n => typeof n === 'string').slice(0, 40);
+    const got = cget_(rels.map(rkey_)), out = {};
+    rels.forEach(n => { const s = got[rkey_(n)]; if (s != null) out[n] = JSON.parse(ungz_(s)); });
+    return { docs: out };
   },
 
   plan(q) {                                                  // 폰에서 바꾼 일정. 같은 id 는 한 번만
@@ -154,15 +153,10 @@ const OPS = {
     const rput = q.rput || {};
     let iq = getJ_('iq') || [];
     if ((q.iqdone || []).length) { iq = iq.filter(x => !q.iqdone.includes(x)); setJ_('iq', iq.length ? iq : null); }
-    if (q.iput && Object.keys(q.iput).length) {               // 맥이 줄여 보낸 그림 → 캐시에 (폰이 img 로 가져간다)
-      const all = {};
-      for (const n in q.iput) {
-        const s = String(q.iput[n]), k = Math.ceil(s.length / ICH);
-        for (let i = 0; i < k; i++) all['i:' + n + '#' + i] = s.slice(i * ICH, (i + 1) * ICH);
-        all['i:' + n + '#n'] = String(k);
-      }
-      CacheService.getScriptCache().putAll(all, IMG_TTL);
-    }
+    const cput = {};                                          // 맥이 줄여 보낸 그림(폰이 img 로) · 폰이 달란 본문(rget 으로) → 캐시에
+    for (const n in q.iput || {}) cput['i:' + n] = String(q.iput[n]);
+    for (const id in rput) if (rput[id] && typeof rput[id].rel === 'string') cput[rkey_(rput[id].rel)] = gz_(rput[id]);
+    cputAll_(cput);
     if ((q.rqdone || []).length) { rq = rq.filter(x => !q.rqdone.includes(x)); setJ_('rq', rq.length ? rq : null); }
     if ((q.rdone || []).length) {                            // 맥이 노트에 쓴 읽음 (그 사이 폰이 또 눌렀으면 남긴다)
       for (const [rel, t] of q.rdone) if (rob[rel] && rob[rel].t === t) delete rob[rel];
@@ -174,13 +168,7 @@ const OPS = {
       if (e && e.t === t) delete ob[d][part][k];
       if (ob[d] && !pending_(ob[d])) delete ob[d];
     }
-    if (Object.keys(put).length || q.dates || q.mind || q.quotes || q.plans || q.reads || q.theme != null || Object.keys(rput).length) rev++;
-    if (Object.keys(rput).length) {
-      const ri = getJ_('ri') || {};
-      for (const id in rput) ri[id] = [rev, setJ_('rb:' + id, rput[id]), rput[id].rel];
-      fitR_(ri);
-      setJ_('ri', ri);
-    }
+    if (Object.keys(put).length || q.dates || q.mind || q.quotes || q.plans || q.reads || q.theme != null) rev++;
     for (const d in put) {
       const o = ob[d];
       if (o) for (const part of ['fm', 'sec']) for (const k in o[part]) put[d][part][k] = o[part][k].v;   // 아직 볼트에 안 쓴 폰 수정은 위에 얹는다
@@ -212,21 +200,41 @@ function fit_(bi, meta) {                                     // 상자가 넘�
   }
 }
 
-function fitR_(ri) {                                          // 읽을 글 본문 상자가 넘치면 오래된 것부터 (못 받은 폰은 다시 달라고 한다)
-  const order = Object.keys(ri).sort((a, b) => ri[a][0] - ri[b][0]);
-  let total = order.reduce((n, id) => n + ri[id][1], 0);
-  while (total > RBOX && order.length > 1) { const id = order.shift(); total -= ri[id][1]; setJ_('rb:' + id, null); delete ri[id]; }
+// 캐시 키는 250자까지라 본문은 경로의 MD5 로
+const rkey_ = rel => 'r:' + Utilities.base64Encode(Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, rel, Utilities.Charset.UTF_8));
+
+function cputAll_(vals) {                                     // 캐시에 6시간 (값 하나 100KB 까지라 ICH 자씩 나눈다)
+  const all = {};
+  for (const k in vals) {
+    const s = vals[k], n = Math.ceil(s.length / ICH);
+    for (let i = 0; i < n; i++) all[k + '#' + i] = s.slice(i * ICH, (i + 1) * ICH);
+    all[k + '#n'] = String(n);
+  }
+  const ks = Object.keys(all);
+  for (let i = 0; i < ks.length; i += 100) CacheService.getScriptCache().putAll(Object.fromEntries(ks.slice(i, i + 100).map(k => [k, all[k]])), IMG_TTL);   // 한 번에 100개씩
+}
+
+function cget_(keys) {                                        // 캐시에서 조각을 이어 붙여서 (조각이 하나라도 없으면 빼고)
+  const cache = CacheService.getScriptCache(), heads = cache.getAll(keys.map(k => k + '#n')), out = {};
+  for (const k of keys) {
+    const n = +heads[k + '#n'] || 0, ks = [];
+    for (let i = 0; i < n; i++) ks.push(k + '#' + i);
+    const parts = n ? cache.getAll(ks) : {};
+    if (n && ks.every(x => parts[x] != null)) out[k] = ks.map(x => parts[x]).join('');
+  }
+  return out;
 }
 
 function out_(o) { return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON); }
 const gz_ = v => Utilities.base64Encode(Utilities.gzip(Utilities.newBlob(JSON.stringify(v))).getBytes());
+const ungz_ = s => Utilities.ungzip(Utilities.newBlob(Utilities.base64Decode(s), 'application/x-gzip')).getDataAsString();
 
 function getJ_(k) {
   const n = +ALL[k + '#n'] || 0;
   if (!n) return null;
   let s = '';
   for (let i = 0; i < n; i++) s += ALL[k + '#' + i];
-  return JSON.parse(Utilities.ungzip(Utilities.newBlob(Utilities.base64Decode(s), 'application/x-gzip')).getDataAsString());
+  return JSON.parse(ungz_(s));
 }
 
 function setJ_(k, v) {                                       // v 가 null 이면 지운다. 저장한 크기(글자 수)를 돌려준다

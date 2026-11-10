@@ -1,7 +1,7 @@
 // node sync/test_sync.mjs - 동기화 서버(Code.js)를 가짜 구글 서비스 위에서 돌려 본다 (실제 서버는 건드리지 않는다)
 // node sync/test_sync.mjs --serve - 같은 가짜를 http://127.0.0.1:8751 로 띄운다 (폰 화면·맥 서버를 붙여 시험할 때. 코드는 Secret.js)
 import { readFileSync } from 'node:fs';
-import { randomBytes } from 'node:crypto';
+import { randomBytes, createHash } from 'node:crypto';
 import { gzipSync, gunzipSync } from 'node:zlib';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
@@ -13,7 +13,8 @@ const g = {
     getAll: ks => Object.fromEntries(ks.filter(k => k in cache).map(k => [k, cache[k]])) }) },
   LockService: { getScriptLock: () => ({ waitLock() {}, releaseLock() {} }) },
   ContentService: { MimeType: { JSON: 'json' }, createTextOutput: s => ({ setMimeType: () => s }) },
-  Utilities: { newBlob: s => blob(s), gzip: b => blob(gzipSync(b.b)), ungzip: b => blob(gunzipSync(b.b)), base64Encode: b => Buffer.from(b).toString('base64'), base64Decode: s => Buffer.from(s, 'base64') },
+  Utilities: { newBlob: s => blob(s), gzip: b => blob(gzipSync(b.b)), ungzip: b => blob(gunzipSync(b.b)), base64Encode: b => Buffer.from(b).toString('base64'), base64Decode: s => Buffer.from(s, 'base64'),
+    computeDigest: (a, s) => [...createHash('md5').update(s, 'utf8').digest()], DigestAlgorithm: { MD5: 'md5' }, Charset: { UTF_8: 'utf8' } },
 };
 const SERVE = process.argv.includes('--serve');
 const code = SERVE ? readFileSync(new URL('./Secret.js', import.meta.url), 'utf8').match(/CODE = '(\w+)'/)[1] : 'ABC';
@@ -96,18 +97,27 @@ assert.equal(call({ op: 'get', since: stale }).stale, true);
 const fresh = call({ op: 'get', since: 0 }).rev;
 call({ op: 'mac', put: { [C]: doc(C, 1) } });
 assert.equal(call({ op: 'get', since: fresh }).stale, undefined);                         // 자주 들르면 괜찮다
-// 읽을 글: 목록·테마는 meta 로, 본문은 폰이 달라는 것만 rb 상자에. 맥이 넣으면 요청에서 빠진다
+// 읽을 글: 목록·테마는 meta 로, 본문은 폰이 달라는 것만 캐시에 (rget 으로 가져간다). 맥이 넣으면 요청에서 빠진다
 const R1 = '03 Economy/개념/듀레이션.md', R2 = '04 Life/읽을거리/깊게 읽기.md', LIST = [{ rel: R1, title: '듀레이션', read_on: '', v: 1 }];
 const rr = call({ op: 'get', since: 0 }).rev;
 call({ op: 'mac', reads: LIST, theme: '.ink { --x: 1 }' });
 r = call({ op: 'get', since: rr });
-assert.deepEqual(r.reads, LIST); assert.equal(r.theme, '.ink { --x: 1 }'); assert.deepEqual(r.rdocs, {});
+assert.deepEqual(r.reads, LIST); assert.equal(r.theme, '.ink { --x: 1 }');
 call({ op: 'rwant', rels: [R1, R2, R1, 5] });
 assert.deepEqual(call({ op: 'mac' }).rq, [R1, R2]);
-const rr2 = r.rev;
+assert.deepEqual(call({ op: 'rget', rels: [R1] }).docs, {});                                  // 아직 안 넣었다
+const propsR = JSON.stringify(Object.keys(store).filter(k => !k.startsWith('rq')).sort());
 assert.deepEqual(call({ op: 'mac', rput: { a1b2: { rel: R1, html: '<p>본문</p>', v: 1 } }, rqdone: [R1] }).rq, [R2]);
-assert.deepEqual(call({ op: 'get', since: rr2 }).rdocs, { [R1]: { rel: R1, html: '<p>본문</p>', v: 1 } });
-assert.deepEqual(call({ op: 'get', since: call({ op: 'get', since: 0 }).rev }).rdocs, {});     // 이미 받은 폰에는 다시 안 온다
+assert.deepEqual(call({ op: 'rget', rels: [R1, R2] }).docs, { [R1]: { rel: R1, html: '<p>본문</p>', v: 1 } });
+assert.equal(JSON.stringify(Object.keys(store).filter(k => !k.startsWith('rq')).sort()), propsR);   // Script Properties 에는 안 남는다
+const LONG = '04 Life/읽을거리/' + '아주 긴 제목'.repeat(40) + '.md', BODY = randomBytes(200000).toString('base64');   // 캐시 키 한도(250자)를 넘는 경로 · 여러 조각
+call({ op: 'mac', rput: { l1: { rel: LONG, html: BODY } } });
+assert.equal(call({ op: 'rget', rels: [LONG] }).docs[LONG].html, BODY);
+assert.ok(Object.keys(cache).every(k => k.length < 250));
+const many = Array.from({ length: 300 }, (_, i) => 'n' + i + '.md');                           // 목록 전부를 한 번에 달라고 해도 큐에 다 남는다
+call({ op: 'rwant', rels: many });
+assert.equal(call({ op: 'mac' }).rq.length, 301);
+call({ op: 'mac', rqdone: many });
 // 읽음: 같은 글은 나중 것만. 맥이 쓰고 rdone 으로 알리면 빠진다 (그 사이 또 눌렀으면 남긴다)
 call({ op: 'rmark', marks: [{ rel: R1, on: true, memo: '한 줄', day: '2026-11-09', t: 10 }, { rel: 7 }] });
 assert.deepEqual(call({ op: 'get', since: 0 }).rwait, [R1]);
@@ -116,11 +126,10 @@ call({ op: 'rmark', marks: [{ rel: R1, on: false, day: '2026-11-09', t: 20 }] })
 assert.deepEqual(Object.keys(call({ op: 'mac', rdone: [[R1, 10]] }).rob), [R1]);
 assert.deepEqual(call({ op: 'mac', rdone: [[R1, 20]] }).rob, {});
 assert.deepEqual(call({ op: 'get', since: 0 }).rwait, []);
-// 본문 상자가 넘치면 오래된 것부터 버린다 (노트 상자와 따로라 노트는 그대로)
-const keep = Object.keys(store).filter(k => k.startsWith('b:')).length;
-for (let i = 0; i < 4; i++) call({ op: 'mac', rput: { ['big' + i]: { rel: 'r' + i, html: randomBytes(30000).toString('base64') } } });
-assert.ok(Object.keys(store).filter(k => k.startsWith('rb:') && !k.endsWith('#n')).reduce((n, k) => n + store[k].length, 0) <= 90000);
-assert.equal(Object.keys(store).filter(k => k.startsWith('b:')).length, keep);
+// 예전 본문 상자(ri, rb:) 흔적은 지운다
+store['ri#n'] = '1'; store['ri#0'] = 'x'; store['rb:abc#n'] = '1'; store['rb:abc#0'] = 'x';
+call({ op: 'get', since: 0 });
+assert.ok(!Object.keys(store).some(k => /^(ri#|rb:)/.test(k)));
 // 그림: 폰이 이름으로 달라고 → 맥이 iq 로 받아 캐시에 넣고 iqdone → 폰이 img 로 가져간다 (Script Properties 에는 안 남는다)
 const G = '메르 그림 01.png', BIG = 'data:image/jpeg;base64,' + randomBytes(150000).toString('base64');
 call({ op: 'iwant', names: [G, G, 3, 'x'.repeat(300)] });
