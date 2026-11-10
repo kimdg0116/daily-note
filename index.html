@@ -572,7 +572,7 @@ function api(u, body) {
 /* ── 폰: 맥 서버 대신 동기화 서버(Apps Script, sync/Code.js)를 우체통으로 쓴다.
    우체통은 오가는 것만 잠깐 들고, 노트 사본은 폰 안(IndexedDB)에 전부 둔다. 처음 연결하면 맥이 모든 노트를 나눠 보내고,
    그 뒤로는 바뀐 노트만 온다. 고친 칸은 보내 두면 맥이 볼트에 쓴다 ── */
-const APP_VERSION = '26.11.10-4';                                     // 올릴 때마다 version.json · sw.js 와 같이 올린다
+const APP_VERSION = '26.11.10-5';                                     // 올릴 때마다 version.json · sw.js 와 같이 올린다
 const LOCAL = /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
 const PHONE = location.protocol === 'https:' || (LOCAL && location.search.includes('phone'));   // ?phone = 맥에서 폰 화면 시험
 // 맥에서 폰 화면을 시험할 때는 늘 가짜 연동 서버(node sync/test_sync.mjs --serve)로만 — 진짜 노트에 시험 글이 섞이지 않게
@@ -1450,6 +1450,7 @@ function rTo(d) {                                                     // 뒤로(
   return RH.a[j] ? j : -1;
 }
 function rOpen(rel, j) {                                              // j: 뒤로·앞으로로 갈 기록 자리
+  if (!RD.open && !rWide() && !(j >= 0)) { RH.a = []; RH.y = []; RH.i = -1; }   // 좁은 화면: 목록에서 연 글이 기록의 처음 (거기서 뒤로 훑으면 목록)
   if (RD.open) { rPush(RD.open); RH.y[RH.i] = $('#reader .rscroll')?.scrollTop || 0; }
   if (j >= 0) { RH.i = j; RH.to = { rel, y: RH.y[j] || 0 }; }
   else if (rel) { rPush(rel); RH.y[RH.i] = 0; }
@@ -1529,7 +1530,9 @@ $('#reads').addEventListener('touchend', e => {
   if (!rTouch) return;
   const t = e.changedTouches[0], dx = t.clientX - rTouch.x, dy = t.clientY - rTouch.y;
   rTouch = null;
-  if (Math.abs(dx) > 70 && Math.abs(dx) > 2 * Math.abs(dy) && getSelection().isCollapsed) rStep(dx > 0 ? -1 : 1);   // 글을 고르는 중이면 그대로
+  if (Math.abs(dx) < 70 || Math.abs(dx) < 2 * Math.abs(dy) || !getSelection().isCollapsed) return;   // 글을 고르는 중이면 그대로
+  if (dx > 0 && rTo(-1) < 0 && !rWide()) return rOpen(null);         // 좁은 화면: 더 돌아갈 글이 없으면 목록으로
+  rStep(dx > 0 ? -1 : 1);
 });
 $('#reads').addEventListener('input', e => { const x = rItem(RD.open); if (e.target.id === 'rmemo' && x && !x.read_on) RD.drafts[x.rel] = e.target.value; });
 $('#reads').addEventListener('change', e => { const x = rItem(RD.open); if (e.target.id === 'rmemo' && x) rMemo(x, e.target.value); });
