@@ -776,8 +776,8 @@ def read_item(p, folder, fn, mt):
 
 
 def read_items():
-    """읽을 글 목록 (정리일 최근 순). 오늘 읽은 글도 남긴다 (그날 안에는 되돌릴 수 있게). 메모를 남긴 글은 날이 지나도 남는다"""
-    today_s, out = date.today().isoformat(), []
+    """읽을 글 목록 (정리일 최근 순). 최근 7일 읽은 글도 남긴다 (오늘 것은 되돌릴 수 있게). 메모를 남긴 글은 날이 더 지나도 남는다"""
+    since, out = (date.today() - timedelta(days=6)).isoformat(), []   # 최근 7일 읽은 글 (READING 「오늘 읽음」 단추)
     for root, dirs, files in os.walk(VAULT):
         dirs[:] = [x for x in dirs if not x.startswith('.')]
         folder = nfc(os.path.relpath(root, VAULT)).replace(os.sep, '/').lstrip('.')
@@ -792,7 +792,7 @@ def read_items():
             except (OSError, UnicodeDecodeError):
                 continue
             it = READ_CACHE[p][1]
-            if it and (not it['read_on'] or it['read_on'] == today_s or it['memo']):   # 메모를 남긴 글은 지난 것도 (READING 「메모」)
+            if it and (not it['read_on'] or it['read_on'] >= since or it['memo']):   # 메모를 남긴 글은 더 지난 것도 (READING 「메모」)
                 out.append(it)
     return sorted(out, key=lambda x: (x['created'], x['title']), reverse=True)
 

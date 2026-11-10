@@ -197,7 +197,7 @@ body.reading { --gut:max(16px, calc((100vw - 1080px) / 2)); }
 #rlist .item.done .d.memo { color:var(--fg); }
 #rlist .d.memo { white-space:pre-line; }
 #rlist .d.memo b { margin-right:6px; color:var(--acc); font-size:12px; }
-#rlist .item.memo .it { padding-left:16px; }
+#rlist .item:is(.memo, .past) .it { padding-left:16px; }
 #rlist .item.memo .d { display:block; color:var(--fg); line-height:1.6; }   /* 메모 칸은 다 보인다 */
 #rlist .sec { display:flex; align-items:baseline; margin:24px 2px 8px; font-size:13px; font-weight:700; color:var(--mute); }
 #rlist .sec span { margin-left:auto; font-weight:500; }
@@ -584,7 +584,7 @@ function api(u, body) {
 /* ── 폰: 맥 서버 대신 동기화 서버(Apps Script, sync/Code.js)를 우체통으로 쓴다.
    우체통은 오가는 것만 잠깐 들고, 노트 사본은 폰 안(IndexedDB)에 전부 둔다. 처음 연결하면 맥이 모든 노트를 나눠 보내고,
    그 뒤로는 바뀐 노트만 온다. 고친 칸은 보내 두면 맥이 볼트에 쓴다 ── */
-const APP_VERSION = '26.11.10-9';                                     // 올릴 때마다 version.json · sw.js 와 같이 올린다
+const APP_VERSION = '26.11.10-10';                                     // 올릴 때마다 version.json · sw.js 와 같이 올린다
 const LOCAL = /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
 const PHONE = location.protocol === 'https:' || (LOCAL && location.search.includes('phone'));   // ?phone = 맥에서 폰 화면 시험
 // 맥에서 폰 화면을 시험할 때는 늘 가짜 연동 서버(node sync/test_sync.mjs --serve)로만 — 진짜 노트에 시험 글이 섞이지 않게
@@ -1330,7 +1330,8 @@ const rIn = x => RD.filter === 'all' || x.g === RD.filter;
 const rUnread = all => RD.list.filter(x => !x.read_on && (all || rIn(x)));
 const rDone = all => RD.list.filter(x => x.read_on === RD.today && (all || rIn(x)));
 const rMemos = () => RD.list.filter(x => x.read_on && x.memo).sort((a, b) => b.read_on.localeCompare(a.read_on));   // 「메모」 칸: 메모를 남긴 글 (지난 것도, 읽은 날 최근 순)
-const rShown = x => RD.filter === 'memo' ? !!(x.read_on && x.memo) : RD.filter === 'done' ? x.read_on === RD.today : rIn(x);
+const rRecent = () => RD.list.filter(x => x.read_on && x.read_on >= shift(RD.today, -6)).sort((a, b) => b.read_on.localeCompare(a.read_on));   // 「오늘 읽음」 단추: 최근 7일 읽은 글
+const rShown = x => RD.filter === 'memo' ? !!(x.read_on && x.memo) : RD.filter === 'done' ? rRecent().includes(x) : rIn(x);
 const rDay = d => d.slice(5).replace('-', '.');
 const rClean = v => v.split('\n').map(l => l.replace(/\s+/g, ' ').trim()).filter(Boolean).join('\n');   // 줄마다 공백 정리, 빈 줄은 뺀다
 const rItem = rel => RD.list.find(x => x.rel === rel) || RD.extra[rel];
@@ -1377,18 +1378,24 @@ function rRow(x, done) {
     <button type="button" class="it" data-rd="${esc(x.rel)}"><span class="t">${esc(dash(x.title))}</span>
       <span class="meta"><span class="tag g-${x.g}">${esc(dash(x.tag))}</span>${x.created.slice(5)} · ${x.min}분</span>${sub}</button></li>`;
 }
+const rPastRow = x => `<li class="item past${RD.open === x.rel ? ' sel' : ''}"><button type="button" class="it" data-rd="${esc(x.rel)}"><span class="t">${esc(dash(x.title))}</span>
+  <span class="meta"><span class="tag g-${x.g}">${esc(dash(x.tag))}</span>${x.created.slice(5)} · ${x.min}분</span>${x.memo ? `<span class="d memo"><b>메모</b>${esc(dash(x.memo))}</span>` : `<span class="d">${esc(dash(x.desc))}</span>`}</button></li>`;   // 지난날 읽은 글: 되돌리기 체크 없이
 const rMemoRow = x => `<li class="item memo${RD.open === x.rel ? ' sel' : ''}"><button type="button" class="it" data-rd="${esc(x.rel)}"><span class="t">${esc(dash(x.title))}</span>
   <span class="meta"><span class="tag g-${x.g}">${esc(dash(x.tag))}</span>${rDay(x.read_on)} 읽음</span><span class="d memo">${esc(dash(x.memo))}</span></button></li>`;
 function rDraw() {
   const f = RD.filter, ul = rUnread(), td = rDone(), all = rDone(true), ms = rMemos(), n = k => RD.list.filter(x => !x.read_on && (k === 'all' || x.g === k)).length;
   const chip = (k, v, c) => `<button type="button" class="fchip${f === k ? ' on' : ''}" data-rf="${k}" aria-pressed="${f === k}">${v}<i>${c}</i></button>`;
-  const doneHint = '<p class="hint">체크를 다시 누르면 오늘 안에는 되돌릴 수 있어요. 내일이면 목록에서 빠지고, 남긴 메모는 「메모」에 모여요.</p>';
+  const doneHint = '<p class="hint">체크를 다시 누르면 오늘 안에는 되돌릴 수 있어요. 지난 7일 읽은 글은 「오늘 읽음」 단추에, 남긴 메모는 「메모」에 모여요.</p>';
+  const rec = rRecent(), days = [...new Set(rec.map(x => x.read_on))];
+  const recent = days.map(d => { const xs = rec.filter(x => x.read_on === d), today = d === RD.today;
+    return `<h3 class="sec">${today ? '오늘' : `${rDay(d)} ${WD[new Date(d + 'T12:00').getDay()]}`}<span>${xs.length}개</span></h3>
+      <ul class="items">${xs.map(x => today ? rRow(x, true) : rPastRow(x)).join('')}</ul>${today ? doneHint : ''}`; }).join('');
   $('#rlist').innerHTML = `<div class="sum"><span class="n">${(f === 'memo' || f === 'done' ? rUnread(true) : ul).length}</span><span class="l">남은 글</span>
       <button type="button" class="r${f === 'done' ? ' on' : ''}" data-rf="done" aria-pressed="${f === 'done'}">오늘 읽음 ${all.length}</button></div>
     <div class="fchips">${Object.entries(RGROUPS).map(([k, v]) => chip(k, v, n(k))).join('')}${chip('memo', '메모', ms.length)}</div>
     ${f === 'memo' ? (ms.length ? `<ul class="items">${ms.map(rMemoRow).join('')}</ul><p class="hint">글을 열면 메모를 고칠 수 있어요. 다 지우면 여기서 빠져요. 옵시디언에서는 그 노트의 memo 속성과 읽은 날 데일리 노트 「읽은 글 메모」에 있어요.</p>`
       : '<div class="empty"><b>남긴 메모가 없어요</b>글 아래 메모 칸에 쓰고 읽음을 누르면 여기에 모여요.</div>')
-    : f === 'done' ? (all.length ? `<ul class="items">${all.map(x => rRow(x, true)).join('')}</ul>${doneHint}` : '<div class="empty"><b>오늘 읽은 글이 없어요</b>글을 읽고 읽음을 누르면 여기에 모여요.</div>')
+    : f === 'done' ? (recent || '<div class="empty"><b>최근 7일 동안 읽은 글이 없어요</b>글을 읽고 읽음을 누르면 여기에 모여요.</div>')
     : `${ul.length ? `<ul class="items">${ul.map(x => rRow(x, false)).join('')}</ul>` : '<div class="empty"><b>다 읽었어요</b>새 글이 들어오면 여기에 떠요.</div>'}
     ${td.length ? `<h3 class="sec">오늘 읽은 글<span>${td.length}개</span></h3><ul class="items">${td.map(x => rRow(x, true)).join('')}</ul>${doneHint}` : ''}`}`;
   readSub();
@@ -1397,7 +1404,7 @@ function rDraw() {
 // 본문 칸: 같은 글이면 위아래 줄(몇 번째·읽음 단추·메모)만 고치고 본문과 스크롤은 그대로 둔다
 function rReader() {
   const r = $('#reader'), wide = rWide();
-  if (wide && !rItem(RD.open)) RD.open = (RD.filter === 'memo' ? rMemos()[0]?.rel : RD.filter === 'done' ? rDone(true)[0]?.rel : rUnread()[0]?.rel || rDone()[0]?.rel) || null;
+  if (wide && !rItem(RD.open)) RD.open = (RD.filter === 'memo' ? rMemos()[0]?.rel : RD.filter === 'done' ? rRecent()[0]?.rel : rUnread()[0]?.rel || rDone()[0]?.rel) || null;
   r.classList.toggle('open', !!RD.open && !wide);
   inkMode();
   const x = rItem(RD.open);
