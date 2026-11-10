@@ -184,6 +184,11 @@ assert a[3:7] == ['> LIST', '', S.READ_HEAD, '> - [[가]] - 메모'] and a[7] ==
 a = S.read_lines_set(a, '가', '고친 메모')
 assert '> - [[가]] - 고친 메모' in a and a.count('> - [[가]] - 메모') == 0
 assert S.read_lines_set(S.read_lines_set(a, '가', None), '나', None) == day_lines
+# 여러 줄 메모: 글 줄 아래 하위 줄로. 한 줄로 고치거나 빼면 하위 줄도 같이
+b = S.read_lines_set(a, '가', '첫 문장\n둘째 문장')
+assert b[b.index('> - [[가]]') + 1:b.index('> - [[가]]') + 3] == ['> \t- 첫 문장', '> \t- 둘째 문장'], b
+assert S.read_lines_set(b, '가', '고친 메모') == a
+assert S.read_lines_set(S.read_lines_set(b, '가', None), '나', None) == day_lines
 for base in (['> [!tip]+ 하루 마무리', '> 몸'], ['끝']):         # 작성·수정 칸이 없는 옛 노트
     assert S.read_lines_set(S.read_lines_set(base, '가', 'm'), '가', None) == base
 # 읽음 되돌리기: read_on 은 빈 값(Home 체크를 풀 때와 같다), memo 줄은 지운다

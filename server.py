@@ -772,7 +772,7 @@ def read_item(p, folder, fn, mt):
 
 
 def read_items():
-    """읽을 글 목록 (정리일 최근 순). 오늘 읽은 글도 남긴다 (그날 안에는 되돌릴 수 있게)"""
+    """읽을 글 목록 (정리일 최근 순). 오늘 읽은 글도 남긴다 (그날 안에는 되돌릴 수 있게). 메모를 남긴 글은 날이 지나도 남는다"""
     today_s, out = date.today().isoformat(), []
     for root, dirs, files in os.walk(VAULT):
         dirs[:] = [x for x in dirs if not x.startswith('.')]
@@ -788,7 +788,7 @@ def read_items():
             except (OSError, UnicodeDecodeError):
                 continue
             it = READ_CACHE[p][1]
-            if it and (not it['read_on'] or it['read_on'] == today_s):
+            if it and (not it['read_on'] or it['read_on'] == today_s or it['memo']):   # 메모를 남긴 글은 지난 것도 (READING 「메모」)
                 out.append(it)
     return sorted(out, key=lambda x: (x['created'], x['title']), reverse=True)
 
@@ -840,15 +840,21 @@ def read_lines_set(lines, title, memo):
         end += 1
     items = lines[h + 1:end]
     hit = next((i for i, l in enumerate(items) if l == link or l.startswith(link + ' ')), None)
+    stop = hit
+    if hit is not None:                            # 여러 줄 메모 = 그 글 줄 아래 들여 쓴 하위 줄
+        stop = hit + 1
+        while stop < len(items) and re.match(r'^> ?(\t| {2,})\S', items[stop]):
+            stop += 1
     if memo is None:
         if hit is not None:
-            del items[hit]
+            del items[hit:stop]
     else:
-        new = link + (f' - {memo}' if memo else '')
+        ms = memo.split('\n') if memo else []
+        new = [link + f' - {ms[0]}'] if len(ms) == 1 else [link] + [f'> \t- {m}' for m in ms]
         if hit is None:
-            items.append(new)
+            items += new
         else:
-            items[hit] = new
+            items[hit:stop] = new
     if not items:                                  # 다 빠졌으면 콜아웃과 붙여 넣었던 빈 줄까지 (위, 없으면 아래)
         s = h - 1 if h > 0 and not lines[h - 1].strip() else h
         if s == h and end < len(lines) and not lines[end].strip():
@@ -860,17 +866,18 @@ def read_lines_set(lines, title, memo):
 def read_mark(rel, on, memo, d=None):
     """d = 읽은 날 (폰에서 누른 날. 맥이 늦게 받아도 그날로). 없으면 오늘"""
     p = vault_md(rel)
-    memo = ' '.join(str(memo or '').split())[:300]
+    memo = '\n'.join(' '.join(l.split()) for l in str(memo or '').splitlines() if l.strip())[:3000]   # 줄마다 공백 정리, 빈 줄은 뺀다
     d = day(d) if d and real_date(str(d)) and day(d) <= date.today() else date.today()
     with FILE_LOCK:
         fm, body = split(open(p, encoding='utf-8').read())
+        was = re.search(r'^read_on:[ \t]*\S', fm, re.M)   # 이미 읽은 글 = 메모만 고친다
         if on:
             fm = fm_set(fm, 'read_on', d)
             fm = fm_set(fm, 'memo', memo) if memo else fm_del(fm, 'memo')
         else:                                      # Home 체크를 풀 때처럼 read_on 은 빈 값으로 남긴다
             fm = fm_del(fm_set(fm, 'read_on', None), 'memo')
         write(p, f'---\n{fm}\n---\n{body}')
-    if on and not os.path.exists(path(d)):         # 그날 노트가 없으면 데일리 템플릿으로 만든다 (쓰기 시작할 때와 같이)
+    if on and not was and not os.path.exists(path(d)):   # 새로 읽은 날 노트가 없으면 데일리 템플릿으로 만든다 (쓰기 시작할 때와 같이)
         created, _ = save_day(d, {}, {})
         if created:
             start_quote(d.isoformat())
@@ -1131,7 +1138,7 @@ class H(BaseHTTPRequestHandler):
             if not isinstance(body.get('on'), bool) or not isinstance(body.get('memo', ''), str):
                 return self.send(400, {'error': '잘못된 요청'})
             try:
-                read_mark(body.get('rel', ''), body['on'], body.get('memo', ''))
+                read_mark(body.get('rel', ''), body['on'], body.get('memo', ''), body.get('day'))   # day = 지난 메모를 고칠 때 그 읽은 날
             except (OSError, ValueError) as e:
                 return self.send(500, {'error': str(e)})
             SYNC_WAKE.set()

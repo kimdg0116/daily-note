@@ -116,7 +116,7 @@ const OPS = {
   rmark(q) {                                                 // 폰에서 누른 읽음·메모·되돌리기. 같은 글은 나중 것만
     const rob = getJ_('rob') || {};
     for (const m of q.marks || []) if (m && typeof m.rel === 'string' && m.rel)
-      rob[m.rel] = { on: !!m.on, memo: String(m.memo || '').slice(0, 300), day: String(m.day || ''), t: +m.t || Date.now() };
+      rob[m.rel] = { on: !!m.on, memo: String(m.memo || '').slice(0, 3000), day: String(m.day || ''), t: +m.t || Date.now() };
     setJ_('rob', rob);
     return { ok: true };
   },

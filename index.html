@@ -194,7 +194,10 @@ body.reading { --gut:max(16px, calc((100vw - 1080px) / 2)); }
 #rlist .d { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; font-size:13.5px; color:var(--mute); word-break:keep-all; }
 #rlist .item.done .t { color:var(--mute); text-decoration:line-through; }
 #rlist .item.done .d.memo { color:var(--fg); }
+#rlist .d.memo { white-space:pre-line; }
 #rlist .d.memo b { margin-right:6px; color:var(--acc); font-size:12px; }
+#rlist .item.memo .it { padding-left:16px; }
+#rlist .item.memo .d { display:block; color:var(--fg); line-height:1.6; }   /* 메모 칸은 다 보인다 */
 #rlist .sec { display:flex; align-items:baseline; margin:24px 2px 8px; font-size:13px; font-weight:700; color:var(--mute); }
 #rlist .sec span { margin-left:auto; font-weight:500; }
 #rlist .hint { margin:10px 2px 0; font-size:12.5px; color:var(--mute); }
@@ -209,9 +212,9 @@ body.reading { --gut:max(16px, calc((100vw - 1080px) / 2)); }
 .rhead .icon-btn { border-color:var(--background-modifier-border, var(--line)); background:var(--background-primary, var(--card)); color:var(--link-color, var(--acc)); }
 .rhead .icon-btn:disabled { opacity:.35; }
 .rscroll { flex:1; min-height:0; overflow-y:auto; overscroll-behavior:contain; }
-.rfoot { flex:none; display:flex; gap:8px; padding:10px 12px; border-top:1px solid var(--background-modifier-border, var(--line)); background:var(--background-primary, var(--card)); }
-.rfoot input { flex:1; min-width:0; height:44px; padding:0 14px; font:inherit; font-size:16px; border:1px solid var(--background-modifier-border, var(--line)); border-radius:12px; background:var(--background-secondary, var(--bg)); color:var(--text-normal, var(--fg)); outline:none; -webkit-user-select:text; user-select:text; }
-.rfoot input:focus { border-color:var(--link-color, var(--acc)); }
+.rfoot { flex:none; display:flex; align-items:flex-end; gap:8px; padding:10px 12px; border-top:1px solid var(--background-modifier-border, var(--line)); background:var(--background-primary, var(--card)); }
+.rfoot textarea { flex:1; min-width:0; height:44px; max-height:40dvh; padding:9px 14px; font:inherit; font-size:16px; line-height:1.5; border:1px solid var(--background-modifier-border, var(--line)); border-radius:12px; background:var(--background-secondary, var(--bg)); color:var(--text-normal, var(--fg)); outline:none; resize:none; overflow-y:auto; -webkit-user-select:text; user-select:text; }
+.rfoot textarea:focus { border-color:var(--link-color, var(--acc)); }
 .rfoot .main { flex:none; height:44px; padding:0 20px; border-radius:12px; font-size:15px; font-weight:800; }
 .rfoot .main.undo { border:1px solid var(--background-modifier-border, var(--line)); background:var(--background-primary, var(--card)); color:var(--red); }
 .rempty { margin:auto; padding:24px; text-align:center; color:var(--text-faint, var(--mute)); }
@@ -234,6 +237,14 @@ body.reading { --gut:max(16px, calc((100vw - 1080px) / 2)); }
    그래서 테마를 고치면 앱도 같이 바뀐다. 앱이 라이트면 테마의 라이트, 다크면 다크 (.ink.theme-light / .theme-dark) */
 .ink .rdoc { padding:16px 20px 40px; font-family:var(--font-text, -apple-system, sans-serif); font-size:var(--font-text-size, 16px); line-height:var(--line-height-normal, 1.5); letter-spacing:0; color:var(--text-normal); -webkit-user-select:text; user-select:text; word-break:normal; }
 @media (min-width:900px) { .ink .rdoc { padding:24px 32px 48px; } }
+/* 아이패드(손가락 + 넓고 높은 화면. 아이폰 가로·맥은 빠진다): 같은 px 이라도 폰보다 멀리 두고 보니 작아 보인다 → 읽는 화면 글씨를 2할 키운다 */
+@media (any-pointer:coarse) and (min-width:700px) and (min-height:600px) {
+  .ink .rdoc { font-size:calc(var(--font-text-size, 16px) * 1.2); }
+  #rlist .it .t { font-size:17px; }
+  #rlist .d { font-size:15px; }
+  #rlist .meta { font-size:13px; }
+  .rfoot textarea { font-size:17px; }
+}
 .ink .rcrumb { font-size:12px; color:var(--text-faint); overflow-wrap:anywhere; }
 .ink .inline-title { margin:.15em 0 .5em; font-size:var(--inline-title-size, var(--h1-size, 2em)); font-weight:var(--inline-title-weight, var(--h1-weight, 700)); line-height:var(--h1-line-height, 1.2); color:var(--inline-title-color, var(--h1-color)); }
 .ink .rprops { display:grid; grid-template-columns:auto minmax(0, 1fr); gap:3px 14px; margin:0 0 1.3em; padding-bottom:.9em; border-bottom:1px solid var(--hr-color, var(--background-modifier-border)); font-size:.875em; }
@@ -572,7 +583,7 @@ function api(u, body) {
 /* ── 폰: 맥 서버 대신 동기화 서버(Apps Script, sync/Code.js)를 우체통으로 쓴다.
    우체통은 오가는 것만 잠깐 들고, 노트 사본은 폰 안(IndexedDB)에 전부 둔다. 처음 연결하면 맥이 모든 노트를 나눠 보내고,
    그 뒤로는 바뀐 노트만 온다. 고친 칸은 보내 두면 맥이 볼트에 쓴다 ── */
-const APP_VERSION = '26.11.10-5';                                     // 올릴 때마다 version.json · sw.js 와 같이 올린다
+const APP_VERSION = '26.11.10-6';                                     // 올릴 때마다 version.json · sw.js 와 같이 올린다
 const LOCAL = /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
 const PHONE = location.protocol === 'https:' || (LOCAL && location.search.includes('phone'));   // ?phone = 맥에서 폰 화면 시험
 // 맥에서 폰 화면을 시험할 때는 늘 가짜 연동 서버(node sync/test_sync.mjs --serve)로만 — 진짜 노트에 시험 글이 섞이지 않게
@@ -772,7 +783,7 @@ if (PHONE) api = async (u, body) => {
     throw Object.assign(new Error('맥에서 본문을 받아 오는 중이에요. 맥 앱이 켜져 있으면 1분 안에 들어와요'), { wait: true });
   }
   if (p === '/api/readmark') {
-    ROUT[body.rel] = { on: body.on, memo: body.memo || '', day: today(), t: Date.now() };
+    ROUT[body.rel] = { on: body.on, memo: body.memo || '', day: body.day || today(), t: Date.now() };
     keepSY(); clearTimeout(pushT); pushT = setTimeout(() => syncPhone().then(phoneRefresh, () => {}), 1200);
     return { ok: true, today: today() };
   }
@@ -1311,7 +1322,11 @@ const RGROUPS = { all: '전체', work: '일', clip: '클리핑', concept: '개�
 const rWide = () => matchMedia('(min-width:900px)').matches;
 const rIn = x => RD.filter === 'all' || x.g === RD.filter;
 const rUnread = all => RD.list.filter(x => !x.read_on && (all || rIn(x)));
-const rDone = all => RD.list.filter(x => x.read_on && (all || rIn(x)));
+const rDone = all => RD.list.filter(x => x.read_on === RD.today && (all || rIn(x)));
+const rMemos = () => RD.list.filter(x => x.read_on && x.memo).sort((a, b) => b.read_on.localeCompare(a.read_on));   // 「메모」 칸: 메모를 남긴 글 (지난 것도, 읽은 날 최근 순)
+const rShown = x => RD.filter === 'memo' ? !!(x.read_on && x.memo) : rIn(x);
+const rDay = d => d.slice(5).replace('-', '.');
+const rClean = v => v.split('\n').map(l => l.replace(/\s+/g, ' ').trim()).filter(Boolean).join('\n');   // 줄마다 공백 정리, 빈 줄은 뺀다
 const rItem = rel => RD.list.find(x => x.rel === rel) || RD.extra[rel];
 const isDark = () => (document.documentElement.dataset.theme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')) === 'dark';
 function inkMode() { const r = $('#reader'); if (r) { r.classList.toggle('theme-dark', isDark()); r.classList.toggle('theme-light', !isDark()); } }
@@ -1356,20 +1371,25 @@ function rRow(x, done) {
     <button type="button" class="it" data-rd="${esc(x.rel)}"><span class="t">${esc(dash(x.title))}</span>
       <span class="meta"><span class="tag g-${x.g}">${esc(dash(x.tag))}</span>${x.created.slice(5)} · ${x.min}분</span>${sub}</button></li>`;
 }
+const rMemoRow = x => `<li class="item memo${RD.open === x.rel ? ' sel' : ''}"><button type="button" class="it" data-rd="${esc(x.rel)}"><span class="t">${esc(dash(x.title))}</span>
+  <span class="meta"><span class="tag g-${x.g}">${esc(dash(x.tag))}</span>${rDay(x.read_on)} 읽음</span><span class="d memo">${esc(dash(x.memo))}</span></button></li>`;
 function rDraw() {
-  const ul = rUnread(), td = rDone(), n = k => RD.list.filter(x => !x.read_on && (k === 'all' || x.g === k)).length;
-  $('#rlist').innerHTML = `<div class="sum"><span class="n">${ul.length}</span><span class="l">남은 글</span><span class="r">오늘 읽음 ${rDone(true).length}</span></div>
-    <div class="fchips">${Object.entries(RGROUPS).map(([k, v]) => `<button type="button" class="fchip${RD.filter === k ? ' on' : ''}" data-rf="${k}" aria-pressed="${RD.filter === k}">${v}<i>${n(k)}</i></button>`).join('')}</div>
-    ${ul.length ? `<ul class="items">${ul.map(x => rRow(x, false)).join('')}</ul>` : '<div class="empty"><b>다 읽었어요</b>새 글이 들어오면 여기에 떠요.</div>'}
+  const ul = rUnread(), td = rDone(), ms = rMemos(), n = k => RD.list.filter(x => !x.read_on && (k === 'all' || x.g === k)).length;
+  const chip = (k, v, c) => `<button type="button" class="fchip${RD.filter === k ? ' on' : ''}" data-rf="${k}" aria-pressed="${RD.filter === k}">${v}<i>${c}</i></button>`;
+  $('#rlist').innerHTML = `<div class="sum"><span class="n">${(RD.filter === 'memo' ? rUnread(true) : ul).length}</span><span class="l">남은 글</span><span class="r">오늘 읽음 ${rDone(true).length}</span></div>
+    <div class="fchips">${Object.entries(RGROUPS).map(([k, v]) => chip(k, v, n(k))).join('')}${chip('memo', '메모', ms.length)}</div>
+    ${RD.filter === 'memo' ? (ms.length ? `<ul class="items">${ms.map(rMemoRow).join('')}</ul><p class="hint">글을 열면 메모를 고칠 수 있어요. 다 지우면 여기서 빠져요. 옵시디언에서는 그 노트의 memo 속성과 읽은 날 데일리 노트 「오늘 읽은 글」에 있어요.</p>`
+      : '<div class="empty"><b>남긴 메모가 없어요</b>글 아래 메모 칸에 쓰고 읽음을 누르면 여기에 모여요.</div>')
+    : `${ul.length ? `<ul class="items">${ul.map(x => rRow(x, false)).join('')}</ul>` : '<div class="empty"><b>다 읽었어요</b>새 글이 들어오면 여기에 떠요.</div>'}
     ${td.length ? `<h3 class="sec">오늘 읽은 글<span>${td.length}개</span></h3><ul class="items">${td.map(x => rRow(x, true)).join('')}</ul>
-    <p class="hint">체크를 다시 누르면 오늘 안에는 되돌릴 수 있어요. 내일이면 목록에서 빠져요.</p>` : ''}`;
+    <p class="hint">체크를 다시 누르면 오늘 안에는 되돌릴 수 있어요. 내일이면 목록에서 빠지고, 남긴 메모는 「메모」에 모여요.</p>` : ''}`}`;
   readSub();
   rReader();
 }
 // 본문 칸: 같은 글이면 위아래 줄(몇 번째·읽음 단추·메모)만 고치고 본문과 스크롤은 그대로 둔다
 function rReader() {
   const r = $('#reader'), wide = rWide();
-  if (wide && !rItem(RD.open)) RD.open = rUnread()[0]?.rel || rDone()[0]?.rel || null;
+  if (wide && !rItem(RD.open)) RD.open = (RD.filter === 'memo' ? rMemos()[0]?.rel : rUnread()[0]?.rel || rDone()[0]?.rel) || null;
   r.classList.toggle('open', !!RD.open && !wide);
   inkMode();
   const x = rItem(RD.open);
@@ -1386,18 +1406,19 @@ function rReader() {
         <button type="button" class="icon-btn" data-r="obs" aria-label="옵시디언에서 열기" title="옵시디언에서 열기">${svg('<path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/>')}</button></div>
       <div class="rscroll"><div class="rdoc"><div class="rcrumb">${esc(x.folder)}${x.min ? ` · 읽는 데 ${x.min}분` : ''}</div><div class="inline-title">${esc(x.title)}</div>
         <div class="rbody"><p class="rwait">불러오는 중</p></div></div></div>
-      <div class="rfoot"><input id="rmemo" type="text" autocomplete="off" enterkeyhint="done" aria-label="한 줄 메모" placeholder="한 줄 메모 (안 써도 돼요)"><button type="button" class="main" data-r="done"></button></div></div>`;
+      <div class="rfoot"><textarea id="rmemo" rows="1" autocomplete="off" aria-label="메모" placeholder="메모 · 좋은 문장 (여러 줄 돼요, 안 써도 돼요)"></textarea><button type="button" class="main" data-r="done"></button></div></div>`;
     rBody(x.rel);
   }
   const ul = rUnread(), i = ul.indexOf(x), b = r.querySelector('[data-r=done]'), m = $('#rmemo');
-  const pos = x.read_on ? '오늘 읽음' : i >= 0 ? `${i + 1} / ${ul.length}` : '', label = x.read_on ? '읽음 취소' : '읽음', ps = r.querySelector('.rpos');
+  const pos = x.read_on ? (x.read_on === RD.today ? '오늘' : rDay(x.read_on)) + ' 읽음' : i >= 0 ? `${i + 1} / ${ul.length}` : '', label = x.read_on ? '읽음 취소' : '읽음', ps = r.querySelector('.rpos');
   if (ps.textContent !== pos) ps.textContent = pos;
   r.querySelector('[data-r=prev]').disabled = rTo(-1) < 0;
   r.querySelector('[data-r=next]').disabled = rTo(1) < 0;
   r.querySelector('.rfoot').hidden = !!x.extra;                      // 목록 밖 노트는 읽기만
   if (b.textContent !== label) b.textContent = label;
   b.classList.toggle('undo', !!x.read_on);
-  if (document.activeElement !== m) m.value = x.read_on ? x.memo : RD.drafts[x.rel] || '';
+  b.hidden = !!x.read_on && x.read_on !== RD.today;                   // 지난날 읽은 글은 메모만 고친다
+  if (document.activeElement !== m) { m.value = x.read_on ? x.memo : RD.drafts[x.rel] || ''; grow(m); }
 }
 async function rBody(rel) {
   const key = rel + '@' + (rItem(rel)?.v || ''), r = $('#reader');   // 노트가 바뀌면(v) 다시 받는다
@@ -1465,21 +1486,21 @@ function rStep(d) {
   if (!matchMedia('(prefers-reduced-motion: reduce)').matches)       // 어느 쪽으로 갔는지 보이게 살짝 밀려 들어온다
     $('#reader .rscroll')?.animate([{ transform: `translateX(${d * 40}px)`, opacity: .3 }, { transform: 'none', opacity: 1 }], { duration: 200, easing: 'ease-out' });
 }
-async function rMark(x, on, memo) {
+async function rMark(x, on, memo) {                                    // 이미 읽은 글은 그 읽은 날(day)로: 메모를 고쳐도 읽은 날은 그대로
   const before = { read_on: x.read_on, memo: x.memo };
-  x.read_on = on ? RD.today : ''; x.memo = on ? memo : '';
-  try { const r = await api('/api/readmark', { rel: x.rel, on, memo }); if (on) x.read_on = RD.today = r.today; return true; }
+  x.read_on = on ? before.read_on || RD.today : ''; x.memo = on ? memo : '';
+  try { const r = await api('/api/readmark', { rel: x.rel, on, memo, day: before.read_on || undefined }); if (on && !before.read_on) x.read_on = RD.today = r.today; return true; }
   catch (e) { Object.assign(x, before); toast('저장하지 못했어요 · ' + e.message); rDraw(); return false; }
 }
 async function rRead(x, fromReader) {                                  // 읽음: 본문에서 누르면 다음 글로 (좁은 화면도)
   const order = rUnread().map(y => y.rel), at = order.indexOf(x.rel), rest = order.filter(y => y !== x.rel);
-  const memo = (fromReader ? $('#rmemo').value : RD.drafts[x.rel] || '').replace(/\s+/g, ' ').trim();
+  const memo = rClean(fromReader ? $('#rmemo').value : RD.drafts[x.rel] || '');
   const p = rMark(x, true, memo);
   delete RD.drafts[x.rel];
   if (fromReader) RD.open = rest[at] ?? rest[0] ?? (rWide() ? x.rel : null);
   rDraw();
   if (fromReader) $('#reader .rscroll')?.scrollTo(0, 0);
-  if (await p) toast('읽음 · 오늘 데일리 노트에 한 줄 남겼어요');
+  if (await p) toast('읽음 · 오늘 데일리 노트에 남겼어요');
 }
 async function rUndo(x) {
   if (x.memo) RD.drafts[x.rel] = x.memo;                              // 쓴 메모는 남겨 둔다
@@ -1488,7 +1509,7 @@ async function rUndo(x) {
   if (await p) toast('읽음을 취소했어요');
 }
 async function rMemo(x, v) {
-  v = v.replace(/\s+/g, ' ').trim();
+  v = rClean(v);
   if (!x.read_on || x.memo === v) return;
   const p = rMark(x, true, v);
   rDraw();
@@ -1513,7 +1534,7 @@ $('#reads').addEventListener('click', e => {
   const b = e.target.closest('button');
   if (!b) return;
   const d = b.dataset, x = rItem(d.rck || d.rd || RD.open);
-  if (d.rf) { RD.filter = d.rf; if (rWide() && rItem(RD.open) && !rIn(rItem(RD.open))) RD.open = null; return rDraw(); }
+  if (d.rf) { RD.filter = d.rf; if (rWide() && rItem(RD.open) && !rShown(rItem(RD.open))) RD.open = null; return rDraw(); }
   if (d.rck && x) return x.read_on ? rUndo(x) : rRead(x, false);
   if (d.rd) return rOpen(d.rd);
   if (d.r === 'back') return rOpen(null);
@@ -1536,8 +1557,8 @@ $('#reads').addEventListener('touchend', e => {
 });
 $('#reads').addEventListener('input', e => { const x = rItem(RD.open); if (e.target.id === 'rmemo' && x && !x.read_on) RD.drafts[x.rel] = e.target.value; });
 $('#reads').addEventListener('change', e => { const x = rItem(RD.open); if (e.target.id === 'rmemo' && x) rMemo(x, e.target.value); });
-$('#reads').addEventListener('keydown', e => {
-  if (e.target.id !== 'rmemo' || e.key !== 'Enter' || e.isComposing || e.keyCode === 229) return;   // 한글 조합 중 Enter 는 글자 확정
+$('#reads').addEventListener('keydown', e => {                       // 메모 칸: Enter = 줄 바꿈, Cmd+Enter = 읽음 (읽은 글은 메모 저장)
+  if (e.target.id !== 'rmemo' || e.key !== 'Enter' || !(e.metaKey || e.ctrlKey) || e.isComposing || e.keyCode === 229) return;
   e.preventDefault();
   const x = rItem(RD.open);
   if (!x) return;
