@@ -583,7 +583,7 @@ function api(u, body) {
 /* ── 폰: 맥 서버 대신 동기화 서버(Apps Script, sync/Code.js)를 우체통으로 쓴다.
    우체통은 오가는 것만 잠깐 들고, 노트 사본은 폰 안(IndexedDB)에 전부 둔다. 처음 연결하면 맥이 모든 노트를 나눠 보내고,
    그 뒤로는 바뀐 노트만 온다. 고친 칸은 보내 두면 맥이 볼트에 쓴다 ── */
-const APP_VERSION = '26.11.10-7';                                     // 올릴 때마다 version.json · sw.js 와 같이 올린다
+const APP_VERSION = '26.11.10-8';                                     // 올릴 때마다 version.json · sw.js 와 같이 올린다
 const LOCAL = /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
 const PHONE = location.protocol === 'https:' || (LOCAL && location.search.includes('phone'));   // ?phone = 맥에서 폰 화면 시험
 // 맥에서 폰 화면을 시험할 때는 늘 가짜 연동 서버(node sync/test_sync.mjs --serve)로만 — 진짜 노트에 시험 글이 섞이지 않게
@@ -998,9 +998,9 @@ const CARDS = {
     if (!D.sec.study?.trim()) return '<span id="c-study" hidden></span>';      // 템플릿에서 뺐다. 옛 노트에 쓴 게 있을 때만
     return `<section class="card" id="c-study"><h3>공부</h3>${ta('data-sec="study"', D.sec.study, '오늘 공부한 것', 'md')}</section>`;
   },
-  'c-reads'() {                                                      // 노트의 「오늘 읽은 글」: READING 에서 남긴 메모가 읽은 날 쌓인다. 여기서 문장을 다듬는다
-    if (D.sec.reads == null) return '<span id="c-reads" hidden></span>';
-    return `<section class="card" id="c-reads"><h3>읽은 글 메모</h3>${ta('data-sec="reads"', D.sec.reads, 'READING 에서 남긴 메모가 여기에 쌓여요', 'md')}
+  'c-reads'() {                                                      // 노트의 「읽은 글 메모」: READING 에서 남긴 메모 문장이 읽은 날 쌓인다 (어느 글 것인지는 빼고). 여기서 다듬는다
+    if (D.sec.memos == null) return '<span id="c-reads" hidden></span>';
+    return `<section class="card" id="c-reads"><h3>읽은 글 메모</h3>${ta('data-sec="memos"', D.sec.memos, 'READING 에서 남긴 메모가 여기에 쌓여요', 'md')}
       <p class="hint">여기서 다듬은 글은 READING 에서 메모를 고쳐도 덮어쓰지 않아요</p></section>`;
   },
   'c-close'() {

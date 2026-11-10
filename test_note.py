@@ -177,30 +177,26 @@ assert open(S.PLANS).read() == f'- [x] 2026-12-05 토플 시험 ✅ {T}\n메모 
 S.plan_apply([{'act': 'edit', 'd': '', 'n': '은행 서류', 'nd': '2026-11-30', 'nn': '은행 서류'}])
 assert S.plan_list()[-1] == {'d': '2026-11-30', 'n': '은행 서류', 'x': True, 'a': '2026-11-03'}
 
-# 읽을 글: 데일리 노트 「오늘 읽은 글」 줄 넣기·고치기·빼기. 다 빼면 원래 노트와 똑같다
+# 읽을 글: 데일리 노트 「오늘 읽은 글」엔 링크만, 「읽은 글 메모」엔 메모 문장만. 다 빼면 원래 노트와 똑같다
 day_lines = ["### Today's Tasks", '', '> [!abstract]- 오늘 작성·수정한 노트', '> LIST', '', '> [!tip]+ 하루 마무리', '> 몸']
-a = S.read_lines_set(S.read_lines_set(day_lines, '가', '메모'), '나', '')
-assert a[3:7] == ['> LIST', '', S.READ_HEAD, '> - [[가]] - 메모'] and a[7] == '> - [[나]]' and a[8] == '', a
-a = S.read_lines_set(a, '가', '고친 메모')
-assert '> - [[가]] - 고친 메모' in a and a.count('> - [[가]] - 메모') == 0
-assert S.read_lines_set(S.read_lines_set(a, '가', None), '나', None) == day_lines
-# 여러 줄 메모: 글 줄 아래 하위 줄로. 한 줄로 고치거나 빼면 하위 줄도 같이
-b = S.read_lines_set(a, '가', '첫 문장\n둘째 문장')
-assert b[b.index('> - [[가]]') + 1:b.index('> - [[가]]') + 3] == ['> \t- 첫 문장', '> \t- 둘째 문장'], b
-assert S.read_lines_set(b, '가', '고친 메모') == a
-assert S.read_lines_set(S.read_lines_set(b, '가', None), '나', None) == day_lines
-# 데일리 화면 「오늘 읽은 글」 칸: '> ' 를 떼고 보여 주고, 고치면 다시 붙인다 (노트 끝에 있어도)
-r = S.sec_get(b, 'reads')
-assert '\t- 첫 문장' in r and S.sec_get(S.sec_set(b, 'reads', r), 'reads') == r
-c = S.sec_set(b, 'reads', '- [[가]]\n\t- 다듬은 문장\n\n- 내 정리')
-assert S.sec_get(c, 'reads') == '- [[가]]\n\t- 다듬은 문장\n\n- 내 정리' and '>' in c and '> \t- 다듬은 문장' in c
-assert S.sec_get(['x', S.READ_HEAD, '> - [[가]]'], 'reads') == '- [[가]]'
-# 데일리에서 손본 글 줄은 READING 메모를 고치거나 읽음을 되돌려도 덮거나 지우지 않는다. 안 손봤으면 고친다
-assert S.read_lines_set(c, '가', '새 메모', '첫 문장\n둘째 문장') == c
-assert S.read_lines_set(c, '가', None, '첫 문장\n둘째 문장') == c
-assert S.read_lines_set(b, '가', '새 메모', '첫 문장\n둘째 문장') == S.read_lines_set(a, '가', '새 메모')
+def mark(lines, title, memo, old=''):
+    return S.memo_set(S.read_lines_set(lines, title, memo is not None), memo or '', old)
+a = mark(mark(day_lines, '가', '메모'), '나', '첫 문장\n- 둘째 문장')
+assert a[3:13] == ['> LIST', '', S.READ_HEAD, '> - [[가]]', '> - [[나]]', '', S.MEMO_HEAD, '> - 메모', '> - 첫 문장', '> - 둘째 문장'] and a[13] == '', a
+assert S.sec_get(a, 'memos') == '- 메모\n- 첫 문장\n- 둘째 문장'
+b = mark(a, '가', '고친 메모', '메모')                                       # 안 다듬었으면 고친 메모로
+assert S.sec_get(b, 'memos') == '- 고친 메모\n- 첫 문장\n- 둘째 문장'
+assert mark(mark(b, '가', None, '고친 메모'), '나', None, '첫 문장\n둘째 문장') == day_lines
+c = S.sec_set(b, 'memos', '- 고친 메모\n- 첫 문장 다듬음\n\n- 내 정리')            # 데일리 화면에서 다듬기
+assert '> - 첫 문장 다듬음' in c and '>' in c and S.sec_get(c, 'memos') == '- 고친 메모\n- 첫 문장 다듬음\n\n- 내 정리'
+d = mark(c, '나', '첫 문장\n둘째 문장\n셋째 문장', '첫 문장\n둘째 문장')             # 다듬은 문장은 그대로, 새 줄만 덧붙인다
+assert S.sec_get(d, 'memos') == '- 고친 메모\n- 첫 문장 다듬음\n\n- 내 정리\n- 셋째 문장', d
+assert S.sec_get(mark(d, '나', None, '첫 문장\n둘째 문장\n셋째 문장'), 'memos') == S.sec_get(d, 'memos')   # 되돌려도 지우지 않는다
+assert S.sec_get(['x', S.MEMO_HEAD, '> - 끝'], 'memos') == '- 끝'               # 노트 끝 콜아웃
+old_day = ['> [!abstract]- 오늘 읽은 글', '> - [[가]] - 예전 메모', '> - [[나]]', '> \t- 하위', '', '끝']   # 예전 노트: 링크 옆 메모는 두고, 되돌리면 하위 줄까지 뺀다
+assert S.read_lines_set(old_day, '가', True) == old_day and S.read_lines_set(old_day, '나', False) == old_day[:2] + old_day[4:]
 for base in (['> [!tip]+ 하루 마무리', '> 몸'], ['끝']):         # 작성·수정 칸이 없는 옛 노트
-    assert S.read_lines_set(S.read_lines_set(base, '가', 'm'), '가', None) == base
+    assert mark(mark(base, '가', 'm'), '가', None, 'm') == base
 # 읽음 되돌리기: read_on 은 빈 값(Home 체크를 풀 때와 같다), memo 줄은 지운다
 fm = 'title: x\ntype: note\nread_on:\nmemo: |-\n  두 줄\n  메모\ntags:\n  - a'
 assert S.fm_del(S.fm_set(S.fm_set(fm, 'read_on', date(2026, 11, 9)), 'read_on', None), 'memo') == 'title: x\ntype: note\nread_on:\ntags:\n  - a'

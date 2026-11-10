@@ -110,9 +110,9 @@ SECS = {
     'today': (lambda l: l.strip() == "### Today's Tasks", lambda l: l.startswith(('> [!', '### ', '#### '))),
     'study': (lambda l: l.startswith('> [!note]') and '공부' in l, lambda l: not l.startswith('>')),
     'journal': (lambda l: l.startswith('### ') and 'Journal' in l, lambda l: l.startswith(('#### #', '> [!question]'))),
-    'reads': (lambda l: bool(READ_HEAD_RE.match(l)), lambda l: not l.startswith('>')),   # 「오늘 읽은 글」: READING 메모가 쌓이고 여기서 다듬는다
+    'memos': (lambda l: bool(MEMO_HEAD_RE.match(l)), lambda l: not l.startswith('>')),   # 「읽은 글 메모」: READING 메모 문장이 쌓이고 여기서 다듬는다
 }
-QUOTED = ('study', 'reads')               # 콜아웃 칸: 줄마다 '> ' 를 떼고 붙인다. 노트 끝에 있어도 된다
+QUOTED = ('study', 'memos')               # 콜아웃 칸: 줄마다 '> ' 를 떼고 붙인다. 노트 끝에 있어도 된다
 
 
 def sec_span(lines, k):
@@ -605,8 +605,8 @@ def sync_once(code):
     mt = {d: os.path.getmtime(path(day(d))) for d in dates}
     mind, quotes, plans = mind_form(), quote_list(), plan_list()
     dh, mh, qh, ph = (hashlib.sha1(json.dumps(x, ensure_ascii=False).encode()).hexdigest() for x in (dates, mind, quotes, plans))
-    if st.get('fmt') != 4:                # 노트 읽는 법이 바뀌었다(3 mind_old, 4 「오늘 읽은 글」 칸) → 폰 사본도 한 번 다시 보낸다
-        st.update(up={d: 0 for d in mt} if 'up' in st else dict(mt), fmt=4)
+    if st.get('fmt') != 5:                # 노트 읽는 법이 바뀌었다(3 mind_old, 5 「읽은 글 메모」 칸) → 폰 사본도 한 번 다시 보낸다
+        st.update(up={d: 0 for d in mt} if 'up' in st else dict(mt), fmt=5)
     up = st.setdefault('up', dict(mt))    # 처음엔 지금 상태를 기준으로만 (노트 내용은 폰이 '다시 받기'로 가져간다)
     changed = [d for d in dates if up.get(d) != mt[d]][:40]           # 맥에서 바뀐 노트 (한 번에 40개까지)
     put = {d: phone_doc(day(d)) for d in changed}
@@ -730,13 +730,15 @@ def sync_loop():
 
 # ── 읽을 글 (READING 화면): Home 「읽어야 할 글」과 같은 기준 (볼트 90 System/scripts/read-queue.js) ──
 # type 이 note·literature 이고 read_on 이 없거나 오늘인 노트. 읽음을 누르면 그 노트의 read_on·memo 두 줄과
-# 오늘 데일리 노트의 「오늘 읽은 글」 콜아웃 줄만 고친다. 본문은 맥에서 HTML 로 바꿔 보내고, 색·크기는 볼트의 옵시디언 테마가 정한다
+# 오늘 데일리 노트의 「오늘 읽은 글」(링크)·「읽은 글 메모」(메모 문장) 콜아웃 줄만 고친다. 본문은 맥에서 HTML 로 바꿔 보내고, 색·크기는 볼트의 옵시디언 테마가 정한다
 
 READ_GROUPS = (('work', ('01 Work · 의학물리',)),
                ('clip', ('03 Economy/메르의 블로그', '03 Economy/Valley AI/피드 정리', '03 Economy/Valley AI/시황', '04 Life/읽을거리')),
                ('concept', ('03 Economy/개념', '04 Life/시사 교양')))
 READ_HEAD = '> [!abstract]- 오늘 읽은 글'
 READ_HEAD_RE = re.compile(r'^>\s?\[!abstract\][+-]?\s*오늘 읽은 글\s*$')
+MEMO_HEAD = '> [!abstract]- 읽은 글 메모'
+MEMO_HEAD_RE = re.compile(r'^>\s?\[!abstract\][+-]?\s*읽은 글 메모\s*$')
 IMG_EXT = ('.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg')
 
 
@@ -817,61 +819,79 @@ def fm_del(fm, key):
     return '\n'.join(lines[:i] + lines[j:])
 
 
-def read_block(title, memo):
-    """「오늘 읽은 글」의 그 글 줄: 메모가 한 줄이면 옆에, 여러 줄이면 하위 줄로"""
-    ms = memo.split('\n') if memo else []
-    link = f'> - [[{title}]]'
-    return [link + f' - {ms[0]}'] if len(ms) == 1 else [link] + [f'> \t- {m}' for m in ms]
-
-
-def read_lines_set(lines, title, memo, old=None):
-    """데일리 노트 본문의 「오늘 읽은 글」 콜아웃에서 그 글 줄을 넣거나 고치거나(memo 문자열) 뺀다(memo None).
-    콜아웃이 없으면 「오늘 작성·수정한 노트」 바로 아래(없으면 하루 마무리 위)에 만들고, 마지막 줄이 빠지면 콜아웃도 지운다.
-    old = 고치기 전 메모. 데일리 화면에서 그 글 줄을 손봤으면(old 로 만든 줄과 다르면) 덮거나 지우지 않는다"""
-    link = f'> - [[{title}]]'
-    h = next((k for k, l in enumerate(lines) if READ_HEAD_RE.match(l)), None)
+def callout(lines, head_re):
+    """콜아웃의 (제목 줄, 끝 다음 줄). 없으면 None"""
+    h = next((k for k, l in enumerate(lines) if head_re.match(l)), None)
     if h is None:
-        if memo is None:
+        return None
+    e = h + 1
+    while e < len(lines) and lines[e].startswith('>'):
+        e += 1
+    return h, e
+
+
+def callout_drop(lines, h, e):
+    """콜아웃과 붙여 넣었던 빈 줄까지 (위, 없으면 아래) 지운다"""
+    s = h - 1 if h > 0 and not lines[h - 1].strip() else h
+    if s == h and e < len(lines) and not lines[e].strip():
+        e += 1
+    return lines[:s] + lines[e:]
+
+
+def read_lines_set(lines, title, on):
+    """데일리 노트 「오늘 읽은 글」 콜아웃에 읽은 글 링크 줄을 넣거나(on) 뺀다. 메모는 「읽은 글 메모」에 따로 (memo_set).
+    콜아웃이 없으면 「오늘 작성·수정한 노트」 바로 아래(없으면 하루 마무리 위)에 만들고, 마지막 줄이 빠지면 콜아웃도 지운다"""
+    link = f'> - [[{title}]]'
+    sp = callout(lines, READ_HEAD_RE)
+    if sp is None:
+        if not on:
             return lines
-        a = next((k for k, l in enumerate(lines) if l.startswith('>') and '오늘 작성·수정한 노트' in l), None)
+        a = callout(lines, re.compile(r'^>.*오늘 작성·수정한 노트'))
         if a is not None:
-            e = a + 1
-            while e < len(lines) and lines[e].startswith('>'):
-                e += 1
-            lines, h = lines[:e] + ['', READ_HEAD] + lines[e:], e + 1
+            lines, h = lines[:a[1]] + ['', READ_HEAD] + lines[a[1]:], a[1] + 1
         else:
             e = next((k for k, l in enumerate(lines) if l.startswith('>') and '하루 마무리' in l), None)
             if e is None:
                 lines, h = lines + ['', READ_HEAD], len(lines) + 1
             else:
                 lines, h = lines[:e] + [READ_HEAD, ''] + lines[e:], e
-    end = h + 1
-    while end < len(lines) and lines[end].startswith('>'):
-        end += 1
+        sp = (h, h + 1)
+    h, end = sp
     items = lines[h + 1:end]
     hit = next((i for i, l in enumerate(items) if l == link or l.startswith(link + ' ')), None)
-    stop = hit
-    if hit is not None:                            # 여러 줄 메모 = 그 글 줄 아래 들여 쓴 하위 줄
-        stop = hit + 1
+    if on and hit is None:
+        items.append(link)
+    elif not on and hit is not None:
+        stop = hit + 1                             # 예전 노트의 여러 줄 메모 = 그 글 줄 아래 들여 쓴 하위 줄
         while stop < len(items) and re.match(r'^> ?(\t| {2,})\S', items[stop]):
             stop += 1
-    if hit is not None and old is not None and items[hit:stop] != read_block(title, old):
-        return lines
-    if memo is None:
-        if hit is not None:
-            del items[hit:stop]
+        del items[hit:stop]
+    return callout_drop(lines, h, end) if not items else lines[:h + 1] + items + lines[end:]
+
+
+def memo_lines(memo):
+    return ['> - ' + re.sub(r'^[-*•]\s+', '', m) for m in memo.split('\n')] if memo else []   # 쓴 글머리표는 뗀다
+
+
+def memo_set(lines, memo, old=''):
+    """데일리 노트 「읽은 글 메모」 콜아웃: 메모 문장만 쌓는다 (어느 글 메모인지는 그 노트 memo 속성과 READING 「메모」에).
+    고치기 전 메모(old) 줄이 그대로 있으면 새 메모로 바꾸고(빈 메모면 뺀다), 데일리 화면에서 다듬어 그대로 없으면
+    새로 생긴 줄만 덧붙인다 (다듬은 문장은 덮거나 지우지 않는다). 콜아웃이 없으면 「오늘 읽은 글」 바로 아래에 만들고, 다 빠지면 지운다"""
+    new, prev = memo_lines(memo), memo_lines(old)
+    sp = callout(lines, MEMO_HEAD_RE)
+    items = lines[sp[0] + 1:sp[1]] if sp else []
+    at = next((i for i in range(len(items) - len(prev) + 1) if items[i:i + len(prev)] == prev), None) if prev else None
+    if at is not None:
+        items[at:at + len(prev)] = new
     else:
-        new = read_block(title, memo)
-        if hit is None:
-            items += new
-        else:
-            items[hit:stop] = new
-    if not items:                                  # 다 빠졌으면 콜아웃과 붙여 넣었던 빈 줄까지 (위, 없으면 아래)
-        s = h - 1 if h > 0 and not lines[h - 1].strip() else h
-        if s == h and end < len(lines) and not lines[end].strip():
-            end += 1
-        return lines[:s] + lines[end:]
-    return lines[:h + 1] + items + lines[end:]
+        items += [l for l in new if l not in prev and l not in items]
+    if sp is None:
+        if not items:
+            return lines
+        r = callout(lines, READ_HEAD_RE)
+        e = r[1] if r else len(lines)
+        return lines[:e] + ['', MEMO_HEAD] + items + lines[e:]
+    return callout_drop(lines, *sp) if not items else lines[:sp[0] + 1] + items + lines[sp[1]:]
 
 
 def read_mark(rel, on, memo, d=None):
@@ -883,9 +903,9 @@ def read_mark(rel, on, memo, d=None):
         fm, body = split(open(p, encoding='utf-8').read())
         was = re.search(r'^read_on:[ \t]*\S', fm, re.M)   # 이미 읽은 글 = 메모만 고친다
         try:
-            old = str((yaml.safe_load(fm) or {}).get('memo') or '') if was else None
+            old = str((yaml.safe_load(fm) or {}).get('memo') or '') if was else ''
         except yaml.YAMLError:
-            old = None
+            old = ''
         if on:
             fm = fm_set(fm, 'read_on', d)
             fm = fm_set(fm, 'memo', memo) if memo else fm_del(fm, 'memo')
@@ -899,7 +919,8 @@ def read_mark(rel, on, memo, d=None):
     if os.path.exists(path(d)):
         with FILE_LOCK:
             fm, body = split(open(path(d), encoding='utf-8').read())
-            lines = read_lines_set(body.split('\n'), nfc(os.path.basename(p))[:-3], memo if on else None, old)
+            lines = read_lines_set(body.split('\n'), nfc(os.path.basename(p))[:-3], on)
+            lines = memo_set(lines, memo if on else '', old)
             write(path(d), f'---\n{fm}\n---\n' + '\n'.join(lines))
 
 
