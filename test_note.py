@@ -189,6 +189,16 @@ b = S.read_lines_set(a, '가', '첫 문장\n둘째 문장')
 assert b[b.index('> - [[가]]') + 1:b.index('> - [[가]]') + 3] == ['> \t- 첫 문장', '> \t- 둘째 문장'], b
 assert S.read_lines_set(b, '가', '고친 메모') == a
 assert S.read_lines_set(S.read_lines_set(b, '가', None), '나', None) == day_lines
+# 데일리 화면 「오늘 읽은 글」 칸: '> ' 를 떼고 보여 주고, 고치면 다시 붙인다 (노트 끝에 있어도)
+r = S.sec_get(b, 'reads')
+assert '\t- 첫 문장' in r and S.sec_get(S.sec_set(b, 'reads', r), 'reads') == r
+c = S.sec_set(b, 'reads', '- [[가]]\n\t- 다듬은 문장\n\n- 내 정리')
+assert S.sec_get(c, 'reads') == '- [[가]]\n\t- 다듬은 문장\n\n- 내 정리' and '>' in c and '> \t- 다듬은 문장' in c
+assert S.sec_get(['x', S.READ_HEAD, '> - [[가]]'], 'reads') == '- [[가]]'
+# 데일리에서 손본 글 줄은 READING 메모를 고치거나 읽음을 되돌려도 덮거나 지우지 않는다. 안 손봤으면 고친다
+assert S.read_lines_set(c, '가', '새 메모', '첫 문장\n둘째 문장') == c
+assert S.read_lines_set(c, '가', None, '첫 문장\n둘째 문장') == c
+assert S.read_lines_set(b, '가', '새 메모', '첫 문장\n둘째 문장') == S.read_lines_set(a, '가', '새 메모')
 for base in (['> [!tip]+ 하루 마무리', '> 몸'], ['끝']):         # 작성·수정 칸이 없는 옛 노트
     assert S.read_lines_set(S.read_lines_set(base, '가', 'm'), '가', None) == base
 # 읽음 되돌리기: read_on 은 빈 값(Home 체크를 풀 때와 같다), memo 줄은 지운다

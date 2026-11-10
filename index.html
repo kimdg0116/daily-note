@@ -200,7 +200,7 @@ body.reading { --gut:max(16px, calc((100vw - 1080px) / 2)); }
 #rlist .item.memo .d { display:block; color:var(--fg); line-height:1.6; }   /* 메모 칸은 다 보인다 */
 #rlist .sec { display:flex; align-items:baseline; margin:24px 2px 8px; font-size:13px; font-weight:700; color:var(--mute); }
 #rlist .sec span { margin-left:auto; font-weight:500; }
-#rlist .hint { margin:10px 2px 0; font-size:12.5px; color:var(--mute); }
+#rlist .hint, #c-reads .hint { margin:10px 2px 0; font-size:12.5px; color:var(--mute); }
 #rlist .empty { padding:22px 16px; border-radius:14px; background:var(--card); text-align:center; color:var(--mute); }
 #rlist .empty b { display:block; color:var(--fg); }
 .reader { background:var(--background-primary, var(--card)); }
@@ -583,7 +583,7 @@ function api(u, body) {
 /* ── 폰: 맥 서버 대신 동기화 서버(Apps Script, sync/Code.js)를 우체통으로 쓴다.
    우체통은 오가는 것만 잠깐 들고, 노트 사본은 폰 안(IndexedDB)에 전부 둔다. 처음 연결하면 맥이 모든 노트를 나눠 보내고,
    그 뒤로는 바뀐 노트만 온다. 고친 칸은 보내 두면 맥이 볼트에 쓴다 ── */
-const APP_VERSION = '26.11.10-6';                                     // 올릴 때마다 version.json · sw.js 와 같이 올린다
+const APP_VERSION = '26.11.10-7';                                     // 올릴 때마다 version.json · sw.js 와 같이 올린다
 const LOCAL = /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
 const PHONE = location.protocol === 'https:' || (LOCAL && location.search.includes('phone'));   // ?phone = 맥에서 폰 화면 시험
 // 맥에서 폰 화면을 시험할 때는 늘 가짜 연동 서버(node sync/test_sync.mjs --serve)로만 — 진짜 노트에 시험 글이 섞이지 않게
@@ -998,6 +998,11 @@ const CARDS = {
     if (!D.sec.study?.trim()) return '<span id="c-study" hidden></span>';      // 템플릿에서 뺐다. 옛 노트에 쓴 게 있을 때만
     return `<section class="card" id="c-study"><h3>공부</h3>${ta('data-sec="study"', D.sec.study, '오늘 공부한 것', 'md')}</section>`;
   },
+  'c-reads'() {                                                      // 노트의 「오늘 읽은 글」: READING 에서 남긴 메모가 읽은 날 쌓인다. 여기서 문장을 다듬는다
+    if (D.sec.reads == null) return '<span id="c-reads" hidden></span>';
+    return `<section class="card" id="c-reads"><h3>읽은 글 메모</h3>${ta('data-sec="reads"', D.sec.reads, 'READING 에서 남긴 메모가 여기에 쌓여요', 'md')}
+      <p class="hint">여기서 다듬은 글은 READING 에서 메모를 고쳐도 덮어쓰지 않아요</p></section>`;
+  },
   'c-close'() {
     const score = (k, l) => `<div class="mood-row"><span class="lbl">${l}</span>
       <div class="moods">${[1, 2, 3, 4, 5].map(n => `<button type="button" data-mood="${k}:${n}" class="${D.fm[k] == n ? 'on' : ''}">${n}</button>`).join('')}</div></div>`;
@@ -1074,7 +1079,7 @@ Object.assign(CARDS, {
 const cardHtml = id => id.startsWith('c-mind') ? mindCard(+id.slice(6)) : CARDS[id]();
 function render() {
   const y = scrollY;
-  const ids = ['c-hero', 'c-plans', 'c-tasks', 'c-work', 'c-study', 'c-close', 'c-journal', ...mindGroups().map((_, i) => 'c-mind' + i), 'c-quote'];
+  const ids = ['c-hero', 'c-plans', 'c-tasks', 'c-work', 'c-study', 'c-reads', 'c-close', 'c-journal', ...mindGroups().map((_, i) => 'c-mind' + i), 'c-quote'];
   drop($('#view'));
   $('#view').innerHTML = ids.map(cardHtml).join('');
   document.querySelectorAll('#view textarea').forEach(grow);
